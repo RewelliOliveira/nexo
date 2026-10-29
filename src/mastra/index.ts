@@ -1,25 +1,18 @@
 
 import { Mastra } from '@mastra/core/mastra';
 import { PinoLogger } from '@mastra/loggers';
-import { LibSQLStore } from '@mastra/libsql';
 import { DuckDBStore } from "@mastra/duckdb";
 import { MastraCompositeStore } from '@mastra/core/storage';
 import { Observability, MastraStorageExporter, MastraPlatformExporter, SensitiveDataFilter } from '@mastra/observability';
 import { nexoAssist } from '@/agent/nexo-assist';
-import { resolveDatabaseUrl } from '@/lib/project-root';
+import { createAgentStore } from './agent-store';
 
 
 export const mastra = new Mastra({
   agents: { nexoAssist },
   storage: new MastraCompositeStore({
     id: 'composite-storage',
-    default: new LibSQLStore({
-      id: "mastra-storage",
-      // Uses a hosted database when deployed (mastra env db create --kind turso),
-      // and a local file during development.
-      url: resolveDatabaseUrl(process.env.TURSO_DATABASE_URL || "file:./mastra.db"),
-      authToken: process.env.TURSO_AUTH_TOKEN,
-    }),
+    default: createAgentStore(),
     domains: {
       observability: await new DuckDBStore().getStore('observability'),
     }
