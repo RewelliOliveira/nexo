@@ -1,14 +1,17 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
+import { CircleSlash, Headset } from "lucide-react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ConversationStatus } from "@/lib/domain";
 import { TopBar } from "../../_components/AppShell";
 import { MAX_EMPLOYEE_MESSAGES } from "../../api/chat/prepare-turn";
 import { chatStateSchema, type ChatState, type DecisionView } from "../_lib/chat-state";
 import { textOf, toolCallsOf } from "../_lib/tool-parts";
 import type { DecisionIndex } from "./AgentActions";
 import { AgentMessage, AgentThinking, UserMessage } from "./AgentMessage";
+import { ChatNotice, NewConversationButton } from "./ChatNotice";
 import { Composer, type ComposerHandle } from "./Composer";
 
 // The server keeps the history in the agent memory: only the new message goes
@@ -25,13 +28,18 @@ export type ChatConversationProps = {
   initialState: ChatState;
   /** When the server rendered the page, ISO; reference for "há 5 dias" */
   renderedAt: string;
+  onStartNew(): void;
 };
+
+/** From here on the counter warns that the session is ending. */
+const LIMIT_WARNING_AT = MAX_EMPLOYEE_MESSAGES - 5;
 
 export function ChatConversation({
   conversationId,
   initialMessages,
   initialState,
   renderedAt,
+  onStartNew,
 }: ChatConversationProps) {
   const [state, setState] = useState(initialState);
   const now = useMemo(() => new Date(renderedAt), [renderedAt]);
@@ -59,14 +67,17 @@ export function ChatConversation({
   const decisions = useMemo(() => indexDecisions(state.decisions), [state.decisions]);
   const ticketsByDraft = useMemo(() => indexTicketsByDraft(messages), [messages]);
   const busy = status === "submitted" || status === "streaming";
-  const open = state.status === "with_agent" && state.employeeMessages < MAX_EMPLOYEE_MESSAGES;
+  const limitReached = state.employeeMessages >= MAX_EMPLOYEE_MESSAGES;
+  const nearLimit = state.employeeMessages >= LIMIT_WARNING_AT && !limitReached;
+  const open = state.status === "with_agent" && !limitReached;
+  const left = MAX_EMPLOYEE_MESSAGES - state.employeeMessages;
   const last = messages.at(-1);
   const thinking = busy && (last?.role !== "assistant" || !hasContent(last));
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
-    // status too: buttons appear under the reply once the stream ends
-  }, [messages, thinking, status]);
+    // Also when buttons or a notice appear under the reply after the stream
+  }, [messages, thinking, status, state.status]);
 
   function send(text: string) {
     if (busy || !open) return;
@@ -76,7 +87,7 @@ export function ChatConversation({
 
   return (
     <>
-      <TopBar current="Atendimento" aside={<AssistantStatus />} />
+      <TopBar current="Atendimento" aside={<ConversationStatusPill status={state.status} />} />
 
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -116,9 +127,32 @@ export function ChatConversation({
         </div>
 
         <div className="mx-auto flex w-full max-w-202 flex-col gap-1.5 px-4 pt-2.5 pb-4.5 sm:px-6">
-          <Composer ref={composerRef} onSend={send} busy={busy} />
-          <p className="text-right text-[12.5px] text-ink-3">
+          {state.status !== "with_agent" ? (
+            <PausedNotice status={state.status} onStartNew={onStartNew} />
+          ) : (
+            limitReached && (
+              <ChatNotice
+                tone="neutral"
+                icon={CircleSlash}
+                title="Você chegou ao limite de 30 mensagens desta conversa"
+                action={<NewConversationButton onClick={onStartNew} />}
+              >
+                Seus chamados continuam salvos. Comece uma nova conversa para seguir com o Nexo
+                Assist.
+              </ChatNotice>
+            )
+          )}
+          <Composer
+            ref={composerRef}
+            onSend={send}
+            busy={busy}
+            disabledReason={composerBlockedReason(state.status, limitReached)}
+          />
+          <p
+            className={`text-right text-[12.5px] ${nearLimit ? "font-medium text-warning-text" : "text-ink-3"}`}
+          >
             {state.employeeMessages}/{MAX_EMPLOYEE_MESSAGES} mensagens nesta sessão
+            {nearLimit && ` · ${left === 1 ? "resta 1" : `restam ${left}`}`}
           </p>
         </div>
       </div>
@@ -154,11 +188,74 @@ function hasContent(message: UIMessage): boolean {
   );
 }
 
-function AssistantStatus() {
+function composerBlockedReason(
+  status: ConversationStatus,
+  limitReached: boolean,
+): string | undefined {
+  if (status === "awaiting_analyst") return "Aguardando um analista…";
+  if (status === "with_analyst") return "Um analista está cuidando da sua conversa";
+  if (status === "closed") return "Conversa encerrada";
+  if (limitReached) return "Limite de mensagens atingido";
+  return undefined;
+}
+
+function PausedNotice({
+  status,
+  onStartNew,
+}: {
+  status: Exclude<ConversationStatus, "with_agent">;
+  onStartNew(): void;
+}) {
+  if (status === "closed") {
+    return (
+      <ChatNotice
+        tone="neutral"
+        icon={CircleSlash}
+        title="Esta conversa foi encerrada"
+        action={<NewConversationButton onClick={onStartNew} />}
+      >
+        Se precisar de mais alguma coisa, comece uma nova conversa.
+      </ChatNotice>
+    );
+  }
+  if (status === "with_analyst") {
+    return (
+      <ChatNotice tone="primary" icon={Headset} title="Um analista assumiu sua conversa">
+        Ele já tem o resumo do caso e vai responder por aqui.
+      </ChatNotice>
+    );
+  }
   return (
-    <span className="flex items-center gap-1.75 rounded-full bg-success-soft px-2.5 py-1.25 text-[12.5px] font-semibold text-success-text">
-      <span aria-hidden className="size-1.75 rounded-full bg-success" />
-      Assistente online
+    <ChatNotice tone="warning" icon={Headset} title="Conversa transferida para um analista">
+      O analista recebeu o resumo do caso e vai continuar por aqui. Enquanto isso, o Nexo Assist
+      não responde nesta conversa.
+    </ChatNotice>
+  );
+}
+
+const STATUS_PILL: Record<ConversationStatus, { label: string; box: string; dot: string }> = {
+  with_agent: {
+    label: "Assistente online",
+    box: "bg-success-soft text-success-text",
+    dot: "bg-success",
+  },
+  awaiting_analyst: {
+    label: "Aguardando analista",
+    box: "bg-warning-soft text-warning-text",
+    dot: "bg-warning",
+  },
+  with_analyst: { label: "Com analista", box: "bg-primary-soft text-primary-text", dot: "bg-cta" },
+  closed: { label: "Conversa encerrada", box: "bg-desk text-ink-3", dot: "bg-ink/25" },
+};
+
+function ConversationStatusPill({ status }: { status: ConversationStatus }) {
+  const pill = STATUS_PILL[status];
+  return (
+    <span
+      className={`flex items-center gap-1.75 rounded-full px-2.5 py-1.25 text-[12.5px] font-semibold ${pill.box}`}
+    >
+      <span aria-hidden className={`size-1.75 rounded-full ${pill.dot}`} />
+      {pill.label}
     </span>
   );
 }

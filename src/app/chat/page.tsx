@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { AppShell } from "../_components/AppShell";
 import { requireEmployee } from "../_lib/auth";
-import { ChatConversation } from "./_components/ChatConversation";
+import { ChatScreen } from "./_components/ChatScreen";
 
 export const metadata: Metadata = { title: "Atendimento · Nexo Assist" };
 
@@ -18,7 +18,7 @@ async function Chat() {
   const employee = await requireEmployee("employee");
   return (
     <AppShell employee={employee}>
-      <ChatConversation
+      <ChatScreen
         conversationId={crypto.randomUUID()}
         initialMessages={[]}
         initialState={{ status: "with_agent", employeeMessages: 0, decisions: [] }}
