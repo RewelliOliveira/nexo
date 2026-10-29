@@ -1,13 +1,16 @@
 import type { AgentServices } from "../services";
 import { createReadTools } from "./read-tools";
+import { suggestReplies } from "./suggest-replies";
 import { createWriteTools } from "./write-tools";
 
+export { repliesSuggested, SUGGEST_REPLIES_TOOL_ID } from "./suggest-replies";
 export { MIN_CONFIDENCE_TO_CHANGE } from "./write-tools";
 
 export function createNexoTools(services: AgentServices) {
   return {
     ...createReadTools(services),
     ...createWriteTools(services),
+    suggestReplies,
   };
 }
 

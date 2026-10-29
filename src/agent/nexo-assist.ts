@@ -2,7 +2,7 @@ import { Agent, type AgentConfig } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
 import { buildInstructions } from "./instructions";
 import { getDefaultAgentServices, type AgentServices } from "./services";
-import { createNexoTools } from "./tools";
+import { createNexoTools, repliesSuggested } from "./tools";
 
 export const NEXO_ASSIST_AGENT_ID = "nexo-assist";
 
@@ -33,6 +33,7 @@ export function createNexoAssistAgent({
     instructions: () => buildInstructions(new Date()),
     model,
     tools: createNexoTools(services),
+    defaultOptions: { stopWhen: repliesSuggested },
     memory: new Memory({
       options: { lastMessages: LAST_MESSAGES, generateTitle: false },
     }),

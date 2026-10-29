@@ -151,4 +151,14 @@ describe("Nexo Assist in the agent loop", () => {
     });
     expect(JSON.stringify(log?.details)).not.toContain("Windows 11");
   });
+
+  it("ends the turn once quick replies are shown", async () => {
+    steps.push(() => [
+      ...reply("Quem está sendo afetado?").slice(0, -1),
+      ...toolCall("suggestReplies", { options: ["Só eu", "Minha equipe"] }),
+    ]);
+    // A further model call would fail: the script has a single step
+    expect(await chat("Minha VPN caiu")).toBe("Quem está sendo afetado?");
+    expect(await h.services.decisions.listByConversation(CONVERSATION_ID)).toEqual([]);
+  });
 });
