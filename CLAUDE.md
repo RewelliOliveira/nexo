@@ -9,7 +9,7 @@ Desafio técnico (Beyond the Bytes). Especificação completa: `docs/PRD.pdf`. P
 - TypeScript com `strict: true` — sem `any`, sem `@ts-ignore`
 - Next.js (App Router) + React para interface e API routes
 - Mastra para o agent; provedor de LLM configurável via `.env`
-- SQLite (Drizzle ORM) para persistência
+- libSQL (compatível com SQLite) via Drizzle ORM para persistência — arquivo local em dev, Turso no deploy; memória do Mastra usa `@mastra/libsql`
 - Vitest para testes; Zod para validar entradas e saídas das ferramentas
 
 ## Comandos
