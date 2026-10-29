@@ -235,14 +235,16 @@ describe("nexo tools", () => {
 describe("legacy ticket system outages", () => {
   it("retries and succeeds when the outage ends", async () => {
     let calls = 0;
-    const h = await createHarness({ failureRate: 1, random: () => (calls++ === 0 ? 0 : 1) });
+    const h = await createHarness({
+      ticketOptions: { failureRate: 1, random: () => (calls++ === 0 ? 0 : 1) },
+    });
 
     const result = await h.run("listMyTickets", {});
     expect(result).toMatchObject({ ok: true });
   });
 
   it("returns a friendly error when it stays down", async () => {
-    const h = await createHarness({ failureRate: 1, random: () => 0 });
+    const h = await createHarness({ ticketOptions: { failureRate: 1, random: () => 0 } });
 
     const result = await h.run("listMyTickets", {});
     expect(result).toMatchObject({ ok: false, error: { code: "service_unavailable" } });

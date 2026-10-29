@@ -34,11 +34,16 @@ export type Harness = {
  * Real services over an in-memory database, calling the tools the way the
  * agent loop does: identity in the request context, messages from memory.
  */
-export async function createHarness(
-  ticketOptions: Partial<TicketServiceOptions> = {},
-): Promise<Harness> {
+export async function createHarness({
+  ticketOptions = {},
+  realClock = false,
+}: {
+  ticketOptions?: Partial<TicketServiceOptions>;
+  /** Use when Mastra stamps the messages: both sides must share one clock */
+  realClock?: boolean;
+} = {}): Promise<Harness> {
   const clock = { now: new Date("2026-10-28T14:00:00Z") };
-  const now = () => clock.now;
+  const now = realClock ? () => new Date() : () => clock.now;
   const db = await createTestDatabase(now());
 
   const services: AgentServices = {
