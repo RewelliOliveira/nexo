@@ -3,6 +3,8 @@ import type { Database } from "@/db/client";
 import { decisionLogs, type DecisionLog } from "@/db/schema";
 
 export type NewDecision = {
+  /** Lets the caller reference the decision before it is recorded */
+  id?: string;
   conversationId: string;
   intent: string;
   action: string;
@@ -29,7 +31,7 @@ export function createDecisionLogService({
         .insert(decisionLogs)
         .values({
           ...decision,
-          id: crypto.randomUUID(),
+          id: decision.id ?? crypto.randomUUID(),
           confidence: Math.min(Math.max(decision.confidence, 0), 1),
           createdAt: now(),
         })
