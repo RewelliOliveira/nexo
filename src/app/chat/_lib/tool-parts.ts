@@ -86,6 +86,11 @@ export type ToolCall = {
 
 export const QUICK_REPLIES_TOOL = "suggestReplies";
 
+/** Decision log of the call; null while running or when none was recorded. */
+export function decisionIdOf(call: ToolCall): string | null {
+  return call.state === "running" ? null : call.decisionId;
+}
+
 type MessagePart = UIMessage["parts"][number];
 
 /** Tool calls of an agent message, in order. Quick replies are left out. */

@@ -2,11 +2,12 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TopBar } from "../../_components/AppShell";
 import { MAX_EMPLOYEE_MESSAGES } from "../../api/chat/prepare-turn";
-import { chatStateSchema, type ChatState } from "../_lib/chat-state";
+import { chatStateSchema, type ChatState, type DecisionView } from "../_lib/chat-state";
 import { textOf } from "../_lib/tool-parts";
+import type { DecisionIndex } from "./AgentActions";
 import { AgentMessage, AgentThinking, UserMessage } from "./AgentMessage";
 import { Composer, type ComposerHandle } from "./Composer";
 
@@ -51,6 +52,7 @@ export function ChatConversation({
     onError: () => void refreshState(),
   });
 
+  const decisions = useMemo(() => indexDecisions(state.decisions), [state.decisions]);
   const busy = status === "submitted" || status === "streaming";
   const last = messages.at(-1);
   const thinking = busy && (last?.role !== "assistant" || !hasContent(last));
@@ -82,7 +84,7 @@ export function ChatConversation({
               message.role === "user" ? (
                 <UserMessage key={message.id} text={textOf(message)} />
               ) : (
-                <AgentMessage key={message.id} message={message} />
+                <AgentMessage key={message.id} message={message} decisions={decisions} />
               ),
             )}
             {thinking && <AgentThinking />}
@@ -99,6 +101,16 @@ export function ChatConversation({
       </div>
     </>
   );
+}
+
+function indexDecisions(decisions: DecisionView[]): DecisionIndex {
+  const byId = new Map(decisions.map((decision) => [decision.id, decision]));
+  const byParent = new Map<string, DecisionView[]>();
+  for (const decision of decisions) {
+    if (!decision.parentId) continue;
+    byParent.set(decision.parentId, [...(byParent.get(decision.parentId) ?? []), decision]);
+  }
+  return { byId, byParent };
 }
 
 function hasContent(message: UIMessage): boolean {

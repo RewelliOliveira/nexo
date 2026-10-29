@@ -1,19 +1,25 @@
 import type { UIMessage } from "ai";
 import type { ReactNode } from "react";
+import { toolCallsOf } from "../_lib/tool-parts";
+import { AgentActions, type DecisionIndex } from "./AgentActions";
 import { RichText } from "./RichText";
 
 type AgentMessageProps = {
   message: UIMessage;
+  decisions: DecisionIndex;
 };
 
-/** A reply of Nexo Assist: who answered, then its text. */
-export function AgentMessage({ message }: AgentMessageProps) {
+/** A reply of Nexo Assist: who answered and what it did, then its text. */
+export function AgentMessage({ message, decisions }: AgentMessageProps) {
+  const calls = toolCallsOf(message);
   const texts = message.parts.flatMap((part) =>
     part.type === "text" && part.text.trim() ? [part.text] : [],
   );
   return (
     <article className="flex flex-col gap-1.5">
-      <AgentHeader />
+      <AgentHeader>
+        <AgentActions calls={calls} decisions={decisions} />
+      </AgentHeader>
       {texts.map((text, index) => (
         <AgentBubble key={index}>
           <RichText text={text} />
