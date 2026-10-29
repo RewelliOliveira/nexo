@@ -53,7 +53,7 @@ export type NexoToolContext = {
   lastEmployeeMessageAt: Date | undefined;
   /** Calls the legacy ticket system, retrying while it is down */
   callTickets<T>(operation: (tickets: TicketService) => Promise<T>): Promise<T>;
-  /** Records an extra decision taken by the system inside this call */
+  /** Records an extra decision taken by the system inside this call, linked to it */
   recordDecision(decision: Omit<NewDecision, "conversationId">): Promise<void>;
 };
 
@@ -103,9 +103,15 @@ export function defineNexoTool<
     id: definition.id,
     description: definition.description,
     inputSchema: definition.inputSchema,
+    // decisionId points to the decision log of the call (null when the call
+    // was refused before one could be recorded); the chat UI shows it
     outputSchema: z.discriminatedUnion("ok", [
-      z.object({ ok: z.literal(true), data: definition.outputSchema }),
-      z.object({ ok: z.literal(false), error: toolErrorSchema }),
+      z.object({ ok: z.literal(true), data: definition.outputSchema, decisionId: z.string() }),
+      z.object({
+        ok: z.literal(false),
+        error: toolErrorSchema,
+        decisionId: z.string().nullable(),
+      }),
     ]),
     execute: async (rawInput, toolContext) => {
       // Mastra already validated the input; parsing again gives us its zod type
@@ -114,6 +120,7 @@ export function defineNexoTool<
         return {
           ok: false as const,
           error: { code: "invalid_input", message: z.prettifyError(parsedInput.error) },
+          decisionId: null,
         };
       }
       const input = parsedInput.data;
@@ -132,6 +139,7 @@ export function defineNexoTool<
             message:
               "Não foi possível identificar o funcionário desta conversa. Peça para ele entrar novamente.",
           },
+          decisionId: null,
         };
       }
 
@@ -141,7 +149,7 @@ export function defineNexoTool<
         // Checks the conversation belongs to this employee before logging to it
         await services.conversations.getOrCreate(employeeId, conversationId);
       } catch (error) {
-        return { ok: false as const, error: toToolError(error) };
+        return { ok: false as const, error: toToolError(error), decisionId: null };
       }
 
       const { intent, confidence, reason, ...args } = input;
@@ -158,7 +166,11 @@ export function defineNexoTool<
         callTickets: (operation) =>
           withRetry(() => operation(services.tickets), services.retry),
         recordDecision: async (decision) => {
-          await safeRecord(services, { ...decision, conversationId });
+          await safeRecord(services, {
+            ...decision,
+            conversationId,
+            details: { ...decision.details, parentDecisionId: decisionId },
+          });
         },
       };
 
@@ -189,14 +201,14 @@ export function defineNexoTool<
 
         const data = await definition.run(input, context);
         await log({ outcome: "success", output: data });
-        return { ok: true as const, data };
+        return { ok: true as const, data, decisionId };
       } catch (error) {
         const toolError = toToolError(error);
         await log({
           outcome: error instanceof ToolRejection ? "rejected" : "failed",
           error: toolError,
         });
-        return { ok: false as const, error: toolError };
+        return { ok: false as const, error: toolError, decisionId };
       }
     },
   });

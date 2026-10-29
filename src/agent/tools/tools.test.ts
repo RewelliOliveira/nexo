@@ -229,6 +229,25 @@ describe("nexo tools", () => {
         { action: "getTicket", details: { outcome: "failed", error: { code: "not_found" } } },
       ]);
     });
+
+    it("returns the decision id so the chat can show the decision", async () => {
+      const result = await h.run("getTicket", { ticketId: "INC-20320" });
+      const [log] = await h.services.decisions.listByConversation(CONVERSATION_ID);
+      expect(result).toMatchObject({ ok: false, decisionId: log.id });
+    });
+
+    it("links the automatic handoff to the call that triggered it", async () => {
+      const draftId = await draft({ ...VPN_DRAFT, priority: "critical", affected: "Time todo" });
+      h.employeeSays();
+      const result = await h.run("createTicket", { draftId, confirmed: true });
+
+      const logs = await h.services.decisions.listByConversation(CONVERSATION_ID);
+      const handoff = logs.find((log) => log.action === "handoffToAnalyst");
+      expect(handoff?.details).toMatchObject({
+        automatic: true,
+        parentDecisionId: (result as { decisionId: string }).decisionId,
+      });
+    });
   });
 });
 
