@@ -1,3 +1,5 @@
+import type { TicketSummary } from "./types";
+
 export type TicketServiceErrorCode =
   | "not_found"
   | "invalid_input"
@@ -30,5 +32,21 @@ export class InvalidStateError extends TicketServiceError {
   constructor(message: string) {
     super("invalid_state", message);
     this.name = "InvalidStateError";
+  }
+}
+
+/**
+ * Raised when the employee already has an active ticket about the same
+ * problem: the existing ticket must be updated instead of duplicated.
+ */
+export class DuplicateTicketError extends TicketServiceError {
+  constructor(readonly existing: TicketSummary[]) {
+    super(
+      "duplicate",
+      `an active ticket about the same problem already exists: ${existing
+        .map((ticket) => ticket.id)
+        .join(", ")}`,
+    );
+    this.name = "DuplicateTicketError";
   }
 }

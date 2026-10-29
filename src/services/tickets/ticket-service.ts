@@ -8,7 +8,13 @@ import {
   type Ticket,
   type TicketType,
 } from "@/db/schema";
-import { InvalidStateError, NotFoundError, TicketServiceError } from "./errors";
+import { isSameProblem } from "./duplicates";
+import {
+  DuplicateTicketError,
+  InvalidStateError,
+  NotFoundError,
+  TicketServiceError,
+} from "./errors";
 import { ACTIVE_STATUSES, computeDueAt, isActiveStatus, isOverdue } from "./sla";
 import {
   createTicketInputSchema,
@@ -20,6 +26,8 @@ import {
   type HandoffResult,
   type ListTicketsFilter,
   type ReopenTicketInput,
+  type SimilarTickets,
+  type SimilarTicketsQuery,
   type TicketDetail,
   type TicketSummary,
   type UpdateTicketInput,
@@ -80,6 +88,33 @@ export function createTicketService({
     return `${type}-${highest + 1}`;
   }
 
+  async function findSimilar(
+    employeeId: string,
+    query: SimilarTicketsQuery,
+  ): Promise<SimilarTickets> {
+    const at = now();
+    const candidates = await db.query.tickets.findMany({
+      where: and(
+        eq(tickets.employeeId, employeeId),
+        eq(tickets.category, query.category),
+      ),
+      orderBy: desc(tickets.updatedAt),
+    });
+    const similar = candidates.filter((ticket) => isSameProblem(query, ticket));
+
+    return {
+      active: similar.filter((ticket) => isActiveStatus(ticket.status)).map(toSummary),
+      reopenable: similar
+        .filter(
+          (ticket) =>
+            ticket.status === "resolved" &&
+            ticket.resolvedAt !== null &&
+            canReopen(ticket.resolvedAt, at),
+        )
+        .map(toSummary),
+    };
+  }
+
   return {
     async list(
       employeeId: string,
@@ -100,11 +135,23 @@ export function createTicketService({
       return getDetail(employeeId, ticketId);
     },
 
+    /**
+     * Tickets of this employee about the same problem: active ones (must be
+     * updated instead of duplicated) and recently resolved ones (can be reopened).
+     */
+    findSimilar,
+
+    /** Creates a ticket, refusing when an active one covers the same problem. */
     async create(
       employeeId: string,
       input: CreateTicketInput,
     ): Promise<TicketDetail> {
       const data = parseInput(createTicketInputSchema, input);
+      const { active } = await findSimilar(employeeId, data);
+      if (active.length > 0) {
+        throw new DuplicateTicketError(active);
+      }
+
       const createdAt = now();
       const id = await nextTicketId(data.type);
 

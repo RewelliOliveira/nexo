@@ -5,6 +5,7 @@ import {
   TICKET_TYPES,
   type Conversation,
   type Ticket,
+  type TicketCategory,
   type TicketUpdate,
 } from "@/db/schema";
 
@@ -52,6 +53,16 @@ export type TicketDetail = TicketSummary & { updates: TicketUpdate[] };
 export type ListTicketsFilter = {
   /** "active" (default) returns only tickets still being worked on */
   scope?: "active" | "all";
+};
+
+export type SimilarTicketsQuery = {
+  title: string;
+  category: TicketCategory;
+};
+
+export type SimilarTickets = {
+  active: TicketSummary[];
+  reopenable: TicketSummary[];
 };
 
 export type HandoffResult = {
