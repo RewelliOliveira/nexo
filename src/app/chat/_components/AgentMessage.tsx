@@ -1,9 +1,12 @@
 import { isToolUIPart, type UIMessage } from "ai";
+import { RotateCcw, ServerCrash } from "lucide-react";
 import type { ReactNode } from "react";
 import type { TicketView } from "@/agent/tools/ticket-view";
+import { Button } from "../../_components/Button";
 import { TicketCard } from "../../_components/TicketCard";
 import { quickRepliesOf, toCardTicket, toolCallsOf, type ToolCall } from "../_lib/tool-parts";
 import { AgentActions, type DecisionIndex } from "./AgentActions";
+import { ChatNotice } from "./ChatNotice";
 import { DraftTicketCard, type DraftState } from "./DraftTicketCard";
 import { QuickReplies } from "./QuickReplies";
 import { RichText } from "./RichText";
@@ -39,6 +42,10 @@ export function AgentMessage({ message, ...context }: AgentMessageProps) {
   // The list is a question only when listing was the last step and the agent
   // asked nothing else; otherwise it was just a check (e.g. for duplicates)
   const replies = quickRepliesOf(message);
+  // The legacy ticket system stayed down even after the retries
+  const ticketsUnavailable = calls.some(
+    (call) => call.state === "failed" && call.errorCode === "service_unavailable",
+  );
   const asksWhichTicket = calls.at(-1)?.toolName === "listMyTickets" && replies.length === 0;
 
   const flow: ReactNode[] = [];
@@ -125,6 +132,23 @@ export function AgentMessage({ message, ...context }: AgentMessageProps) {
       </AgentHeader>
       {flow}
       {awaiting}
+      {ticketsUnavailable && context.latest && (
+        <ChatNotice
+          tone="warning"
+          icon={ServerCrash}
+          title="O sistema de chamados está instável agora"
+          action={
+            context.interactive && (
+              <Button variant="secondary" onClick={() => context.onSend("Pode tentar de novo?")}>
+                <RotateCcw aria-hidden />
+                Tentar novamente
+              </Button>
+            )
+          }
+        >
+          Ele costuma voltar em alguns segundos. Nada do que você contou foi perdido.
+        </ChatNotice>
+      )}
     </article>
   );
 }

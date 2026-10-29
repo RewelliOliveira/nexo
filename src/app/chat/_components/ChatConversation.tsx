@@ -1,12 +1,14 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { CircleSlash, Headset } from "lucide-react";
+import { AlertTriangle, CircleSlash, Headset, LogIn, RotateCcw } from "lucide-react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ConversationStatus } from "@/lib/domain";
 import { TopBar } from "../../_components/AppShell";
+import { Button } from "../../_components/Button";
 import { MAX_EMPLOYEE_MESSAGES } from "../../api/chat/prepare-turn";
+import { describeChatError } from "../_lib/chat-errors";
 import { chatStateSchema, type ChatState, type DecisionView } from "../_lib/chat-state";
 import { textOf, toolCallsOf } from "../_lib/tool-parts";
 import type { DecisionIndex } from "./AgentActions";
@@ -56,7 +58,7 @@ export function ChatConversation({
     }
   }, [conversationId]);
 
-  const { messages, sendMessage, status } = useChat({
+  const { messages, sendMessage, regenerate, clearError, status, error } = useChat({
     id: conversationId,
     messages: initialMessages,
     transport,
@@ -73,16 +75,23 @@ export function ChatConversation({
   const left = MAX_EMPLOYEE_MESSAGES - state.employeeMessages;
   const last = messages.at(-1);
   const thinking = busy && (last?.role !== "assistant" || !hasContent(last));
+  const failure = error ? describeChatError(error) : null;
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
     // Also when buttons or a notice appear under the reply after the stream
-  }, [messages, thinking, status, state.status]);
+  }, [messages, thinking, status, state.status, error]);
 
   function send(text: string) {
     if (busy || !open) return;
+    clearError();
     setState((current) => ({ ...current, employeeMessages: current.employeeMessages + 1 }));
     void sendMessage({ text });
+  }
+
+  function retry() {
+    clearError();
+    void regenerate();
   }
 
   return (
@@ -104,6 +113,8 @@ export function ChatConversation({
               }
               const next = messages[index + 1];
               const latest = index === messages.length - 1;
+              // A reply that failed before saying anything is shown as the error below
+              if (!hasContent(message) && !(busy && latest)) return null;
               return (
                 <AgentMessage
                   key={message.id}
@@ -122,6 +133,40 @@ export function ChatConversation({
               );
             })}
             {thinking && <AgentThinking />}
+            {failure?.kind === "retry" && (
+              <ChatNotice
+                role="alert"
+                tone="danger"
+                icon={AlertTriangle}
+                title={failure.title}
+                action={
+                  <Button variant="secondary" onClick={retry}>
+                    <RotateCcw aria-hidden />
+                    Tentar novamente
+                  </Button>
+                }
+              >
+                {failure.message}
+              </ChatNotice>
+            )}
+            {failure?.kind === "signed_out" && (
+              <ChatNotice
+                role="alert"
+                tone="warning"
+                icon={LogIn}
+                title="Sua sessão terminou"
+                action={
+                  <a
+                    href="/login"
+                    className="inline-flex h-9 items-center gap-2 rounded-[8px] bg-cta px-3.5 text-[13.5px] font-semibold text-white hover:bg-cta/90"
+                  >
+                    Entrar de novo
+                  </a>
+                }
+              >
+                {failure.message}
+              </ChatNotice>
+            )}
             <div ref={endRef} />
           </div>
         </div>
