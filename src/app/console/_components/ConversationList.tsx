@@ -151,7 +151,13 @@ type ConversationRowProps = {
   onSelect(): void;
 };
 
-function ConversationRow({ conversation, analystId, selected, now, onSelect }: ConversationRowProps) {
+function ConversationRow({
+  conversation,
+  analystId,
+  selected,
+  now,
+  onSelect,
+}: ConversationRowProps) {
   const attention = needsAttention(conversation, analystId);
   const tag = conversationTag(conversation, analystId);
   const preview = messagePreview(conversation, analystId);

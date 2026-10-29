@@ -1,6 +1,6 @@
 "use client";
 
-import { MessagesSquare } from "lucide-react";
+import { Loader2, MessagesSquare } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import type { z } from "zod";
 import type { Employee } from "@/db/schema";
@@ -11,8 +11,21 @@ import {
   type ConversationItem,
 } from "../_lib/console-state";
 import { usePolling } from "../_lib/use-polling";
+import {
+  assumeConversation,
+  closeConversation,
+  releaseConversation,
+  type ConsoleActionResult,
+} from "../actions";
 import { ConsoleRail } from "./ConsoleRail";
 import { ConversationList } from "./ConversationList";
+import { ConversationView, type ConsoleAction } from "./ConversationView";
+
+const ACTIONS: Record<ConsoleAction, (conversationId: string) => Promise<ConsoleActionResult>> = {
+  assume: assumeConversation,
+  release: releaseConversation,
+  close: closeConversation,
+};
 
 type ConsoleScreenProps = {
   analyst: Pick<Employee, "id" | "name" | "email">;
@@ -36,6 +49,8 @@ export function ConsoleScreen({
   const [selectedId, setSelectedId] = useState(initialSelectedId);
   const [detail, setDetail] = useState(initialDetail);
   const [now, setNow] = useState(() => new Date(renderedAt));
+  const [pending, setPending] = useState<ConsoleAction | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   // Answers for a conversation the analyst already left are dropped
   const selectedRef = useRef(initialSelectedId);
 
@@ -67,15 +82,33 @@ export function ConsoleScreen({
     if (selectedRef.current) void refreshDetail(selectedRef.current);
   });
 
-  function select(conversationId: string) {
+  function select(conversationId: string | null) {
     if (conversationId === selectedRef.current) return;
     selectedRef.current = conversationId;
     setSelectedId(conversationId);
     setDetail(null);
+    setActionError(null);
     const url = new URL(window.location.href);
-    url.searchParams.set("conversa", conversationId);
+    if (conversationId) url.searchParams.set("conversa", conversationId);
+    else url.searchParams.delete("conversa");
     window.history.replaceState(null, "", url);
-    void refreshDetail(conversationId);
+    if (conversationId) void refreshDetail(conversationId);
+  }
+
+  async function act(action: ConsoleAction) {
+    const conversationId = selectedRef.current;
+    if (!conversationId || pending) return;
+    setPending(action);
+    setActionError(null);
+    try {
+      const result = await ACTIONS[action](conversationId);
+      if (!result.ok) setActionError(result.error.message);
+    } catch {
+      setActionError("Não consegui falar com o servidor. Confira a conexão e tente de novo.");
+    }
+    // Either way the screen shows the conversation as it is now
+    await Promise.all([refreshList(), refreshDetail(conversationId)]);
+    setPending(null);
   }
 
   return (
@@ -93,12 +126,31 @@ export function ConsoleScreen({
         onSelect={select}
         className={selectedId ? "hidden lg:flex" : "flex"}
       />
-      <main className="hidden min-w-0 flex-1 flex-col items-center justify-center gap-3 bg-[#EEF1F5] p-6 text-center lg:flex">
-        <MessagesSquare aria-hidden className="size-8 text-ink-3" />
-        <p className="text-[14.5px] text-ink-3">
-          {detail ? detail.conversation.employee.name : "Escolha uma conversa na lista."}
-        </p>
-      </main>
+      {detail ? (
+        <ConversationView
+          key={detail.conversation.id}
+          detail={detail}
+          analystId={analyst.id}
+          now={now}
+          pending={pending}
+          error={actionError}
+          onAction={(action) => void act(action)}
+          onBack={() => select(null)}
+        />
+      ) : (
+        <main
+          className={`min-w-0 flex-1 flex-col items-center justify-center gap-3 bg-[#EEF1F5] p-6 text-center ${selectedId ? "flex" : "hidden lg:flex"}`}
+        >
+          {selectedId ? (
+            <Loader2 aria-label="Carregando a conversa" className="size-6 animate-spin text-ink-3" />
+          ) : (
+            <>
+              <MessagesSquare aria-hidden className="size-8 text-ink-3" />
+              <p className="text-[14.5px] text-ink-3">Escolha uma conversa na lista.</p>
+            </>
+          )}
+        </main>
+      )}
     </>
   );
 }
