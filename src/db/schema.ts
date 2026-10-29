@@ -9,6 +9,7 @@ import {
 import {
   CONVERSATION_STATUSES,
   EMPLOYEE_ROLES,
+  HANDOFF_REASONS,
   MESSAGE_ROLES,
   TICKET_CATEGORIES,
   TICKET_PRIORITIES,
@@ -95,7 +96,7 @@ export const conversations = sqliteTable(
       .default("with_agent"),
     analystId: text("analyst_id").references(() => employees.id),
     // Filled when the conversation is handed off to an analyst
-    handoffReason: text("handoff_reason"),
+    handoffReason: text("handoff_reason", { enum: HANDOFF_REASONS }),
     handoffSummary: text("handoff_summary"),
     handoffTicketId: text("handoff_ticket_id").references(() => tickets.id),
     handedOffAt: integer("handed_off_at", { mode: "timestamp_ms" }),
