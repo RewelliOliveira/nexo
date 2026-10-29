@@ -6,6 +6,7 @@ import { DuckDBStore } from "@mastra/duckdb";
 import { MastraCompositeStore } from '@mastra/core/storage';
 import { Observability, MastraStorageExporter, MastraPlatformExporter, SensitiveDataFilter } from '@mastra/observability';
 import { nexoAssist } from '@/agent/nexo-assist';
+import { resolveDatabaseUrl } from '@/lib/project-root';
 
 
 export const mastra = new Mastra({
@@ -16,7 +17,7 @@ export const mastra = new Mastra({
       id: "mastra-storage",
       // Uses a hosted database when deployed (mastra env db create --kind turso),
       // and a local file during development.
-      url: process.env.TURSO_DATABASE_URL ?? "file:./mastra.db",
+      url: resolveDatabaseUrl(process.env.TURSO_DATABASE_URL || "file:./mastra.db"),
       authToken: process.env.TURSO_AUTH_TOKEN,
     }),
     domains: {
