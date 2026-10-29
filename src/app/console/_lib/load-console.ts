@@ -42,8 +42,9 @@ export async function loadConversationDetail(conversationId: string): Promise<Co
   const byMessage = new Map<string, DecisionLog[]>();
   const pending: DecisionLog[] = [];
   for (const decision of decisions) {
-    if (!decision.messageId) pending.push(decision);
-    else byMessage.set(decision.messageId, [...(byMessage.get(decision.messageId) ?? []), decision]);
+    const { messageId } = decision;
+    if (!messageId) pending.push(decision);
+    else byMessage.set(messageId, [...(byMessage.get(messageId) ?? []), decision]);
   }
 
   return {

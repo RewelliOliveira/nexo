@@ -43,3 +43,8 @@ export function formatDeadline(date: Date, now: Date): string {
   const full = formatDateTime(date);
   return formatDay(date) === formatDay(now) ? (full.split(", ")[1] ?? full) : full;
 }
+
+/** "14:20" */
+export function formatTime(date: Date): string {
+  return formatDateTime(date).split(", ")[1] ?? "";
+}
