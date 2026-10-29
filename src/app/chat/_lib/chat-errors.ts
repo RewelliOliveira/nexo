@@ -25,7 +25,8 @@ export function describeChatError(error: Error): ChatFailure {
     if (code === "unauthenticated") return { kind: "signed_out", message };
     return { kind: "retry", title: "Não consegui enviar sua mensagem", message };
   }
-  if (error instanceof TypeError || /failed to fetch|network/i.test(error.message)) {
+  // fetch rejects with a TypeError only when the request never reached the server
+  if (error instanceof TypeError) {
     return {
       kind: "retry",
       title: "Sem conexão com o Nexo Assist",
@@ -33,7 +34,10 @@ export function describeChatError(error: Error): ChatFailure {
     };
   }
   // Text written by the route for the employee, or an unexpected failure
-  const readable = body === undefined && error.message.length < 200 && !/[{}]/.test(error.message);
+  const readable =
+    body === undefined &&
+    error.message.length < 200 &&
+    !/[{}<]|failed to fetch/i.test(error.message);
   return {
     kind: "retry",
     title: "Não consegui responder",

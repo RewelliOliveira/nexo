@@ -32,6 +32,14 @@ describe("chat errors", () => {
     });
   });
 
+  it("does not blame the connection when the server failed", () => {
+    expect(describeChatError(new Error("Failed to fetch the chat response."))).toMatchObject({
+      kind: "retry",
+      title: "Não consegui responder",
+      message: "Não consegui responder agora. Tente novamente em instantes.",
+    });
+  });
+
   it("never shows raw technical output", () => {
     const failure = describeChatError(new Error('{"unexpected": true}'));
     expect(failure).toMatchObject({ kind: "retry" });

@@ -37,7 +37,7 @@ export function ChatNotice({
       className={`flex flex-wrap items-start gap-3 rounded-[12px] border px-4 py-3 ${classes.box}`}
     >
       <Icon aria-hidden className={`mt-0.5 size-4.5 shrink-0 ${classes.icon}`} />
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-[13.5px] leading-normal">
+      <div className="flex min-w-0 flex-1 basis-56 flex-col gap-0.5 text-[13.5px] leading-normal">
         <p className="font-semibold text-ink">{title}</p>
         {children && <div className="text-ink-2">{children}</div>}
       </div>
