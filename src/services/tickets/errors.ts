@@ -50,3 +50,11 @@ export class DuplicateTicketError extends TicketServiceError {
     this.name = "DuplicateTicketError";
   }
 }
+
+/** The legacy ticket system is temporarily down. Safe to retry later. */
+export class TicketServiceUnavailableError extends TicketServiceError {
+  constructor(readonly retryAfterMs: number) {
+    super("unavailable", "legacy ticket system is temporarily unavailable");
+    this.name = "TicketServiceUnavailableError";
+  }
+}

@@ -14,6 +14,7 @@ import {
   InvalidStateError,
   NotFoundError,
   TicketServiceError,
+  TicketServiceUnavailableError,
 } from "./errors";
 import { ACTIVE_STATUSES, computeDueAt, isActiveStatus, isOverdue } from "./sla";
 import {
@@ -36,9 +37,16 @@ import {
 const DAY = 24 * 60 * 60 * 1000;
 export const REOPEN_WINDOW_DAYS = 7;
 
+const DEFAULT_OUTAGE_MS = 3000;
+
 export type TicketServiceOptions = {
   db: Database;
   now?: () => Date;
+  /** Chance (0-1) that a call starts an outage of the legacy system */
+  failureRate?: number;
+  /** How long an outage lasts once it starts */
+  outageMs?: number;
+  random?: () => number;
 };
 
 /**
@@ -48,7 +56,27 @@ export type TicketServiceOptions = {
 export function createTicketService({
   db,
   now = () => new Date(),
+  failureRate = 0,
+  outageMs = DEFAULT_OUTAGE_MS,
+  random = Math.random,
 }: TicketServiceOptions) {
+  let outageUntil = 0;
+
+  /**
+   * Simulates the legacy system going down for a few seconds. Called at the
+   * start of every public operation, before anything is read or written.
+   */
+  function callLegacySystem(): void {
+    const at = now().getTime();
+    if (at < outageUntil) {
+      throw new TicketServiceUnavailableError(outageUntil - at);
+    }
+    if (random() < failureRate) {
+      outageUntil = at + outageMs;
+      throw new TicketServiceUnavailableError(outageMs);
+    }
+  }
+
   function toSummary(ticket: Ticket): TicketSummary {
     return { ...ticket, isOverdue: isOverdue(ticket, now()) };
   }
@@ -120,6 +148,7 @@ export function createTicketService({
       employeeId: string,
       filter: ListTicketsFilter = {},
     ): Promise<TicketSummary[]> {
+      callLegacySystem();
       const scope = filter.scope ?? "active";
       const rows = await db.query.tickets.findMany({
         where: and(
@@ -131,7 +160,8 @@ export function createTicketService({
       return rows.map(toSummary);
     },
 
-    get(employeeId: string, ticketId: string): Promise<TicketDetail> {
+    async get(employeeId: string, ticketId: string): Promise<TicketDetail> {
+      callLegacySystem();
       return getDetail(employeeId, ticketId);
     },
 
@@ -139,13 +169,20 @@ export function createTicketService({
      * Tickets of this employee about the same problem: active ones (must be
      * updated instead of duplicated) and recently resolved ones (can be reopened).
      */
-    findSimilar,
+    async findSimilar(
+      employeeId: string,
+      query: SimilarTicketsQuery,
+    ): Promise<SimilarTickets> {
+      callLegacySystem();
+      return findSimilar(employeeId, query);
+    },
 
     /** Creates a ticket, refusing when an active one covers the same problem. */
     async create(
       employeeId: string,
       input: CreateTicketInput,
     ): Promise<TicketDetail> {
+      callLegacySystem();
       const data = parseInput(createTicketInputSchema, input);
       const { active } = await findSimilar(employeeId, data);
       if (active.length > 0) {
@@ -186,6 +223,7 @@ export function createTicketService({
       ticketId: string,
       input: UpdateTicketInput,
     ): Promise<TicketDetail> {
+      callLegacySystem();
       const data = parseInput(updateTicketInputSchema, input);
       const ticket = await findOwnedTicket(employeeId, ticketId);
       if (!isActiveStatus(ticket.status)) {
@@ -235,6 +273,7 @@ export function createTicketService({
       ticketId: string,
       input: ReopenTicketInput,
     ): Promise<TicketDetail> {
+      callLegacySystem();
       const data = parseInput(reopenTicketInputSchema, input);
       const ticket = await findOwnedTicket(employeeId, ticketId);
       const reopenedAt = now();
@@ -280,6 +319,7 @@ export function createTicketService({
       employeeId: string,
       input: HandoffInput,
     ): Promise<HandoffResult> {
+      callLegacySystem();
       const data = parseInput(handoffInputSchema, input);
       const conversation = await db.query.conversations.findFirst({
         where: and(
