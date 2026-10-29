@@ -1,4 +1,4 @@
-import { and, count, eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   conversations,
@@ -44,6 +44,17 @@ export function createConversationService({
   }
 
   return {
+    /** The conversation, or undefined when it was not started yet. */
+    find,
+
+    /** Most recently active conversation of the employee, to resume it. */
+    async findLatest(employeeId: string): Promise<Conversation | undefined> {
+      return db.query.conversations.findFirst({
+        where: eq(conversations.employeeId, employeeId),
+        orderBy: desc(conversations.updatedAt),
+      });
+    },
+
     async get(employeeId: string, conversationId: string): Promise<Conversation> {
       const conversation = await find(employeeId, conversationId);
       if (!conversation) throw new ConversationNotFoundError(conversationId);

@@ -36,6 +36,22 @@ describe("conversation service", () => {
     );
   });
 
+  it("finds the latest conversation of the employee", async () => {
+    let tick = 0;
+    conversations = createConversationService({
+      db: await createTestDatabase(new Date()),
+      now: () => new Date(Date.UTC(2026, 9, 28, 12, 0, tick++)),
+    });
+    expect(await conversations.findLatest("emp-ana")).toBeUndefined();
+    await conversations.getOrCreate("emp-ana", "conv-1");
+    await conversations.getOrCreate("emp-ana", "conv-2");
+    await conversations.getOrCreate("emp-bruno", "conv-3");
+    await conversations.addMessage("conv-1", "employee", "voltei");
+
+    expect(await conversations.findLatest("emp-ana")).toMatchObject({ id: "conv-1" });
+    expect(await conversations.findLatest("emp-bruno")).toMatchObject({ id: "conv-3" });
+  });
+
   it("counts messages by role", async () => {
     await conversations.getOrCreate("emp-ana", "conv-1");
     await conversations.addMessage("conv-1", "employee", "oi");
