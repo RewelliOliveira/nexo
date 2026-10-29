@@ -112,7 +112,8 @@ type DecisionDetailsProps = {
   automatic?: boolean;
 };
 
-function DecisionDetails({ decision, call, automatic = false }: DecisionDetailsProps) {
+/** One recorded decision: intent, action, confidence and reason. */
+export function DecisionDetails({ decision, call, automatic = false }: DecisionDetailsProps) {
   const title = actionName(decision?.action ?? call?.toolName ?? "");
   return (
     <div className={`flex flex-col gap-2.5 px-4 py-3 text-[13px] ${automatic ? "pl-8" : ""}`}>

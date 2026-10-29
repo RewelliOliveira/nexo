@@ -1,20 +1,14 @@
 import { toAISdkMessages } from "@mastra/ai-sdk/ui";
 import { Memory } from "@mastra/memory";
 import type { UIMessage } from "ai";
-import { z } from "zod";
-import type { DecisionLog } from "@/db/schema";
 import { createAgentStore } from "@/mastra/agent-store";
 import { getConversationService, getDecisionLogService } from "@/services/conversations";
-import { DECISION_OUTCOMES, type ChatState, type DecisionView } from "./chat-state";
+import type { ChatState } from "./chat-state";
+import { toDecisionView } from "./decision-view";
 
 // Reads the agent memory without loading the whole Mastra instance: the
 // page and the chat route would each open its observability store otherwise
 let historyMemory: Memory | undefined;
-
-const decisionDetailsSchema = z.object({
-  outcome: z.enum(DECISION_OUTCOMES).optional(),
-  parentDecisionId: z.string().optional(),
-});
 
 /**
  * Status, message count and decision log of a conversation of the logged-in
@@ -60,17 +54,4 @@ export async function loadChatHistory(
     perPage: false,
   });
   return toAISdkMessages(messages, { version: "v7" });
-}
-
-function toDecisionView(log: DecisionLog): DecisionView {
-  const details = decisionDetailsSchema.safeParse(log.details ?? {});
-  return {
-    id: log.id,
-    parentId: details.data?.parentDecisionId ?? null,
-    intent: log.intent,
-    action: log.action,
-    confidence: log.confidence,
-    reason: log.reason,
-    outcome: details.data?.outcome ?? null,
-  };
 }
