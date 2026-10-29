@@ -1,0 +1,190 @@
+import { getToolName, isToolUIPart, type UIMessage } from "ai";
+import { z } from "zod";
+import {
+  parseDateTime,
+  ticketDetailViewSchema,
+  ticketViewSchema,
+  type TicketView,
+} from "@/agent/tools/ticket-view";
+import {
+  TICKET_CATEGORIES,
+  TICKET_PRIORITIES,
+  TICKET_TYPES,
+} from "@/lib/domain";
+import type { TicketCardTicket } from "../../_components/TicketCard";
+
+// Tool calls arrive in the UI message as raw tool input and output. Parsing
+// them here keeps the components free of unknown shapes.
+
+const draftSchema = z.object({
+  title: z.string(),
+  description: z.string(),
+  type: z.enum(TICKET_TYPES),
+  category: z.enum(TICKET_CATEGORIES),
+  priority: z.enum(TICKET_PRIORITIES),
+  affected: z.string(),
+});
+
+const RESULT_SCHEMAS = {
+  searchKnowledgeBase: z.object({
+    articles: z.array(z.object({ id: z.string(), title: z.string() })),
+  }),
+  listMyTickets: z.object({ tickets: z.array(ticketViewSchema) }),
+  getTicket: z.object({ ticket: ticketDetailViewSchema }),
+  findSimilarTickets: z.object({
+    active: z.array(ticketViewSchema),
+    reopenable: z.array(ticketViewSchema),
+  }),
+  draftTicket: z.object({
+    draftId: z.string(),
+    draft: draftSchema,
+    dueAtIfCreatedNow: z.string(),
+    similar: z.object({
+      active: z.array(ticketViewSchema),
+      reopenable: z.array(ticketViewSchema),
+    }),
+  }),
+  createTicket: z.object({ ticket: ticketViewSchema, handedOffToAnalyst: z.boolean() }),
+  updateTicket: z.object({ ticket: ticketViewSchema }),
+  reopenTicket: z.object({ ticket: ticketViewSchema }),
+  handoffToAnalyst: z.object({ ticket: ticketViewSchema.nullable() }),
+} as const;
+
+type ResultSchemas = typeof RESULT_SCHEMAS;
+export type KnownTool = keyof ResultSchemas;
+
+export type ToolResult = {
+  [K in KnownTool]: { tool: K; data: z.infer<ResultSchemas[K]> };
+}[KnownTool];
+
+export type ToolDraft = z.infer<typeof draftSchema>;
+
+const envelopeSchema = z.union([
+  z.object({ ok: z.literal(true), data: z.unknown(), decisionId: z.string() }),
+  z.object({
+    ok: z.literal(false),
+    error: z.object({ code: z.string(), message: z.string() }),
+    decisionId: z.string().nullable(),
+  }),
+  // Mastra's own answer when the model sends input the schema refuses
+  z.object({ error: z.literal(true), message: z.string() }),
+]);
+
+const ticketIdInputSchema = z.object({ ticketId: z.string() });
+const repliesInputSchema = z.object({ options: z.array(z.string()).min(1) });
+
+export type ToolCall = {
+  toolCallId: string;
+  toolName: string;
+  /** Number of the ticket the call is about, when the model sent one */
+  ticketId: string | null;
+} & (
+  | { state: "running" }
+  | { state: "done"; decisionId: string; result: ToolResult | null }
+  | { state: "failed"; decisionId: string | null; errorCode: string }
+);
+
+export const QUICK_REPLIES_TOOL = "suggestReplies";
+
+type MessagePart = UIMessage["parts"][number];
+
+/** Tool calls of an agent message, in order. Quick replies are left out. */
+export function toolCallsOf(message: UIMessage): ToolCall[] {
+  return message.parts.flatMap((part) => {
+    if (!isToolUIPart(part)) return [];
+    const toolName = getToolName(part);
+    if (toolName === QUICK_REPLIES_TOOL) return [];
+    return [parseToolPart(part, toolName)];
+  });
+}
+
+/** Options the agent offered as buttons in this message, if any. */
+export function quickRepliesOf(message: UIMessage): string[] {
+  for (const part of message.parts) {
+    if (!isToolUIPart(part) || getToolName(part) !== QUICK_REPLIES_TOOL) continue;
+    const input = repliesInputSchema.safeParse(part.input);
+    if (input.success) return input.data.options;
+  }
+  return [];
+}
+
+export function textOf(message: UIMessage): string {
+  return message.parts
+    .flatMap((part) => (part.type === "text" ? [part.text] : []))
+    .join("\n\n")
+    .trim();
+}
+
+function parseToolPart(
+  part: Extract<MessagePart, { toolCallId: string }>,
+  toolName: string,
+): ToolCall {
+  const ticketInput = ticketIdInputSchema.safeParse(part.input);
+  const base = {
+    toolCallId: part.toolCallId,
+    toolName,
+    ticketId: ticketInput.success ? ticketInput.data.ticketId.toUpperCase() : null,
+  };
+
+  if (part.state === "output-error") {
+    return { ...base, state: "failed", decisionId: null, errorCode: "tool_error" };
+  }
+  if (part.state !== "output-available") return { ...base, state: "running" };
+
+  const envelope = envelopeSchema.safeParse(part.output);
+  if (!envelope.success) {
+    return { ...base, state: "failed", decisionId: null, errorCode: "unexpected_output" };
+  }
+  const output = envelope.data;
+  if ("error" in output && output.error === true) {
+    return { ...base, state: "failed", decisionId: null, errorCode: "invalid_input" };
+  }
+  if (!("ok" in output)) {
+    return { ...base, state: "failed", decisionId: null, errorCode: "unexpected_output" };
+  }
+  if (!output.ok) {
+    return {
+      ...base,
+      state: "failed",
+      decisionId: output.decisionId,
+      errorCode: output.error.code,
+    };
+  }
+  return {
+    ...base,
+    state: "done",
+    decisionId: output.decisionId,
+    result: parseResult(toolName, output.data),
+  };
+}
+
+function parseResult(toolName: string, data: unknown): ToolResult | null {
+  if (!isKnownTool(toolName)) return null;
+  const parsed = RESULT_SCHEMAS[toolName].safeParse(data);
+  // The cast pairs the tool name with the schema it was just parsed with
+  return parsed.success ? ({ tool: toolName, data: parsed.data } as ToolResult) : null;
+}
+
+function isKnownTool(name: string): name is KnownTool {
+  return Object.hasOwn(RESULT_SCHEMAS, name);
+}
+
+/** A ticket from a tool result, as the ticket card takes it. */
+export function toCardTicket(
+  view: TicketView & { description?: string },
+): TicketCardTicket | null {
+  const createdAt = parseDateTime(view.createdAt);
+  const updatedAt = parseDateTime(view.updatedAt);
+  if (!createdAt || !updatedAt) return null;
+  return {
+    id: view.id,
+    title: view.title,
+    description: view.description,
+    status: view.status,
+    category: view.category,
+    priority: view.priority,
+    isOverdue: view.isOverdue,
+    createdAt,
+    updatedAt,
+  };
+}
