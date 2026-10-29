@@ -1,11 +1,15 @@
 import { toAISdkMessages } from "@mastra/ai-sdk/ui";
+import { Memory } from "@mastra/memory";
 import type { UIMessage } from "ai";
 import { z } from "zod";
-import { NEXO_ASSIST_AGENT_ID } from "@/agent/nexo-assist";
 import type { DecisionLog } from "@/db/schema";
-import { mastra } from "@/mastra";
+import { createAgentStore } from "@/mastra/agent-store";
 import { getConversationService, getDecisionLogService } from "@/services/conversations";
 import { DECISION_OUTCOMES, type ChatState, type DecisionView } from "./chat-state";
+
+// Reads the agent memory without loading the whole Mastra instance: the
+// page and the chat route would each open its observability store otherwise
+let historyMemory: Memory | undefined;
 
 const decisionDetailsSchema = z.object({
   outcome: z.enum(DECISION_OUTCOMES).optional(),
@@ -46,8 +50,8 @@ export async function loadChatHistory(
   employeeId: string,
   conversationId: string,
 ): Promise<UIMessage[]> {
-  const memory = await mastra.getAgentById(NEXO_ASSIST_AGENT_ID).getMemory();
-  if (!memory) return [];
+  historyMemory ??= new Memory({ storage: createAgentStore() });
+  const memory = historyMemory;
   const thread = await memory.getThreadById({ threadId: conversationId });
   if (!thread || thread.resourceId !== employeeId) return [];
   const { messages } = await memory.recall({

@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { getConversationService } from "@/services/conversations";
 import { AppShell } from "../_components/AppShell";
 import { requireEmployee } from "../_lib/auth";
 import { ChatScreen } from "./_components/ChatScreen";
+import { loadChatHistory, loadChatState } from "./_lib/load-chat";
 
 export const metadata: Metadata = { title: "Atendimento · Nexo Assist" };
 
@@ -16,12 +18,23 @@ export default function ChatPage() {
 
 async function Chat() {
   const employee = await requireEmployee("employee");
+  // Coming back continues the last conversation, unless it was closed
+  const latest = await getConversationService().findLatest(employee.id);
+  const resumed = latest && latest.status !== "closed" ? latest : undefined;
+  const conversationId = resumed?.id ?? crypto.randomUUID();
+  const [initialState, initialMessages] = resumed
+    ? await Promise.all([
+        loadChatState(employee.id, conversationId),
+        loadChatHistory(employee.id, conversationId),
+      ])
+    : [{ status: "with_agent" as const, employeeMessages: 0, decisions: [] }, []];
+
   return (
     <AppShell employee={employee}>
       <ChatScreen
-        conversationId={crypto.randomUUID()}
-        initialMessages={[]}
-        initialState={{ status: "with_agent", employeeMessages: 0, decisions: [] }}
+        conversationId={conversationId}
+        initialMessages={initialMessages}
+        initialState={initialState}
         renderedAt={new Date().toISOString()}
       />
     </AppShell>
