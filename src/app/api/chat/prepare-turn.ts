@@ -1,0 +1,38 @@
+import type { ConversationStatus } from "@/db/schema";
+import type { ConversationService } from "@/services/conversations";
+
+/** Annex A: each chat session accepts up to 30 employee messages. */
+export const MAX_EMPLOYEE_MESSAGES = 30;
+
+export type ChatTurn =
+  | { kind: "agent" }
+  /** Taken over by an analyst or closed: the agent must stay silent */
+  | { kind: "paused"; status: Exclude<ConversationStatus, "with_agent"> }
+  | { kind: "limit_reached" };
+
+/**
+ * Decides whether the agent may answer this message. The employee's message
+ * is always stored, so an analyst sees it even while the agent is paused.
+ */
+export async function prepareChatTurn(
+  conversations: ConversationService,
+  { employeeId, conversationId, text }: {
+    employeeId: string;
+    conversationId: string;
+    text: string;
+  },
+): Promise<ChatTurn> {
+  const conversation = await conversations.getOrCreate(employeeId, conversationId);
+  if (conversation.status !== "with_agent") {
+    await conversations.addMessage(conversationId, "employee", text);
+    return { kind: "paused", status: conversation.status };
+  }
+
+  const sent = await conversations.countMessages(conversationId, "employee");
+  if (sent >= MAX_EMPLOYEE_MESSAGES) {
+    return { kind: "limit_reached" };
+  }
+
+  await conversations.addMessage(conversationId, "employee", text);
+  return { kind: "agent" };
+}
