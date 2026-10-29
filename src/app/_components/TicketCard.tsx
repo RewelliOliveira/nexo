@@ -4,8 +4,14 @@ import { formatDateTime, formatRelative } from "../_lib/format";
 import { TICKET_CATEGORY_LABEL } from "../_lib/labels";
 import { PriorityBadge, TicketStatusBadge } from "./Badge";
 
+/** What the card shows; the description is optional in compact results. */
+export type TicketCardTicket = Pick<
+  TicketSummary,
+  "id" | "title" | "status" | "category" | "priority" | "createdAt" | "updatedAt" | "isOverdue"
+> & { description?: string };
+
 type TicketCardProps = {
-  ticket: TicketSummary;
+  ticket: TicketCardTicket;
   /** Reference time for "há 5 dias"; passed in so rendering stays pure */
   now: Date;
   /** Buttons shown in the card footer, e.g. confirm / edit / cancel */
@@ -27,7 +33,9 @@ export function TicketCard({ ticket, now, actions }: TicketCardProps) {
         <h3 className="text-lg leading-tight font-semibold tracking-[-0.2px] text-ink">
           {ticket.title}
         </h3>
-        <p className="text-[13.5px] leading-normal text-ink-2">{ticket.description}</p>
+        {ticket.description && (
+          <p className="text-[13.5px] leading-normal text-ink-2">{ticket.description}</p>
+        )}
       </div>
 
       <dl className="mx-4.5 mb-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-rule pt-3 sm:grid-cols-4">
