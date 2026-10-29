@@ -4,7 +4,7 @@ import {
   TICKET_PRIORITIES,
   TICKET_STATUSES,
   TICKET_TYPES,
-} from "@/db/schema";
+} from "@/lib/domain";
 import type { TicketDetail, TicketSummary } from "@/services/tickets";
 
 const dateTimeFormat = new Intl.DateTimeFormat("pt-BR", {
