@@ -84,3 +84,4 @@ docs: describe architecture and agent decisions in readme
 - Não colocar regra crítica apenas no prompt
 - Não acessar o banco diretamente a partir do agent — sempre via serviços
 - Não adicionar dependências sem necessidade clara
+- Next 16 com Cache Components ativo: páginas e rotas que leem o banco ou a sessão são dinâmicas (usar `await connection()` ou envolver em `<Suspense>`); nada de dado de chamado/conversa em cache
