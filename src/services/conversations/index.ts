@@ -1,4 +1,5 @@
 import { getDatabase } from "@/db/client";
+import { createConsoleService, type ConsoleService } from "./console-service";
 import {
   createConversationService,
   type ConversationService,
@@ -20,9 +21,24 @@ export {
   type DecisionLogService,
   type NewDecision,
 } from "./decision-log-service";
+export {
+  CONSOLE_LIST_LIMIT,
+  ConversationStateError,
+  createConsoleService,
+  type Analyst,
+  type ConsoleConversation,
+  type ConsoleService,
+} from "./console-service";
 
 let defaultConversationService: ConversationService | undefined;
 let defaultDecisionLogService: DecisionLogService | undefined;
+let defaultConsoleService: ConsoleService | undefined;
+
+/** Every employee's conversations: only for analysts, the caller checks the role. */
+export function getConsoleService(): ConsoleService {
+  defaultConsoleService ??= createConsoleService({ db: getDatabase() });
+  return defaultConsoleService;
+}
 
 export function getConversationService(): ConversationService {
   defaultConversationService ??= createConversationService({ db: getDatabase() });
