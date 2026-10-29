@@ -5,6 +5,7 @@ import { TicketCard } from "../../_components/TicketCard";
 import { quickRepliesOf, toCardTicket, toolCallsOf, type ToolCall } from "../_lib/tool-parts";
 import { AgentActions, type DecisionIndex } from "./AgentActions";
 import { DraftTicketCard, type DraftState } from "./DraftTicketCard";
+import { QuickReplies } from "./QuickReplies";
 import { RichText } from "./RichText";
 import { TicketSelector } from "./TicketSelector";
 
@@ -37,17 +38,18 @@ export function AgentMessage({ message, ...context }: AgentMessageProps) {
   const callsById = new Map(calls.map((call) => [call.toolCallId, call]));
   // The list is a question only when listing was the last step and the agent
   // asked nothing else; otherwise it was just a check (e.g. for duplicates)
-  const asksWhichTicket =
-    calls.at(-1)?.toolName === "listMyTickets" && quickRepliesOf(message).length === 0;
+  const replies = quickRepliesOf(message);
+  const asksWhichTicket = calls.at(-1)?.toolName === "listMyTickets" && replies.length === 0;
 
   const flow: ReactNode[] = [];
   const awaiting: ReactNode[] = [];
   let texts: string[] = [];
-  const flushText = () => {
-    if (texts.length === 0) return;
+  const flushText = (footer?: ReactNode) => {
+    if (texts.length === 0 && !footer) return;
     flow.push(
       <AgentBubble key={`text-${flow.length}`}>
-        <RichText text={texts.join("\n\n")} />
+        {texts.length > 0 && <RichText text={texts.join("\n\n")} />}
+        {footer}
       </AgentBubble>,
     );
     texts = [];
@@ -104,7 +106,17 @@ export function AgentMessage({ message, ...context }: AgentMessageProps) {
         break;
     }
   }
-  flushText();
+  // Quick replies close the last bubble, right under the question
+  flushText(
+    replies.length > 0 ? (
+      <QuickReplies
+        options={replies}
+        chosen={replies.find((option) => option === context.nextUserText) ?? null}
+        interactive={context.interactive}
+        onChoose={context.onSend}
+      />
+    ) : undefined,
+  );
 
   return (
     <article className="flex flex-col gap-1.5">
