@@ -177,6 +177,7 @@ export type Conversation = typeof conversations.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type DecisionLog = typeof decisionLogs.$inferSelect;
 
+export type EmployeeRole = (typeof EMPLOYEE_ROLES)[number];
 export type TicketType = (typeof TICKET_TYPES)[number];
 export type TicketCategory = (typeof TICKET_CATEGORIES)[number];
 export type TicketPriority = (typeof TICKET_PRIORITIES)[number];
