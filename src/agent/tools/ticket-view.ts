@@ -21,6 +21,20 @@ export function formatDateTime(date: Date): string {
   return dateTimeFormat.format(date);
 }
 
+const FORMATTED_DATE_TIME = /^(\d{2})\/(\d{2})\/(\d{4}),?\s+(\d{2}):(\d{2})$/;
+
+/**
+ * Reads back a date written by formatDateTime, e.g. for the chat to show a
+ * tool result. Brasília has had no daylight saving time since 2019.
+ */
+export function parseDateTime(value: string): Date | null {
+  const match = FORMATTED_DATE_TIME.exec(value.trim());
+  if (!match) return null;
+  const [, day, month, year, hour, minute] = match;
+  const date = new Date(`${year}-${month}-${day}T${hour}:${minute}:00-03:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 // Compact ticket shape for the model: fewer tokens and no internal fields
 export const ticketViewSchema = z.object({
   id: z.string(),
