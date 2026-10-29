@@ -12,7 +12,7 @@ type AppShellProps = {
 /** Sidebar with navigation and the signed-in employee, around the page. */
 export function AppShell({ employee, children }: AppShellProps) {
   return (
-    <div className="flex h-dvh min-h-0 flex-1 bg-paper">
+    <div className="flex h-dvh bg-paper">
       <aside className="hidden w-58 shrink-0 flex-col border-r border-rule px-3.5 pt-5 pb-3.5 md:flex">
         <div className="flex items-center gap-2.5 px-2 text-[#037AF6]">
           <NexoMark className="w-5" />
@@ -47,7 +47,7 @@ export function AppShell({ employee, children }: AppShellProps) {
         </form>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">{children}</div>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
     </div>
   );
 }
