@@ -1,28 +1,45 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
-import { Button } from "../_components/Button";
+import { AppShell } from "../_components/AppShell";
 import { requireEmployee } from "../_lib/auth";
-import { signOut } from "../login/actions";
+import { ChatConversation } from "./_components/ChatConversation";
+
+export const metadata: Metadata = { title: "Atendimento · Nexo Assist" };
 
 export default function ChatPage() {
   return (
-    <Suspense>
-      <Placeholder />
+    <Suspense fallback={<ChatSkeleton />}>
+      <Chat />
     </Suspense>
   );
 }
 
-// Placeholder until the screen is built; already guarded by role
-async function Placeholder() {
+async function Chat() {
   const employee = await requireEmployee("employee");
   return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-4 bg-desk p-6 text-center">
-      <p className="font-display text-3xl text-ink">Olá, {employee.name.split(" ")[0]}</p>
-      <p className="text-[15.5px] text-ink-3">O chat com o Nexo Assist chega no próximo passo.</p>
-      <form action={signOut}>
-        <Button type="submit" variant="secondary">
-          Sair
-        </Button>
-      </form>
-    </main>
+    <AppShell employee={employee}>
+      <ChatConversation
+        conversationId={crypto.randomUUID()}
+        initialMessages={[]}
+        initialState={{ status: "with_agent", employeeMessages: 0, decisions: [] }}
+      />
+    </AppShell>
+  );
+}
+
+function ChatSkeleton() {
+  return (
+    <div role="status" className="flex h-dvh flex-1 bg-paper">
+      <span className="sr-only">Carregando sua conversa…</span>
+      <div aria-hidden className="hidden w-58 shrink-0 border-r border-rule md:block" />
+      <div aria-hidden className="flex flex-1 flex-col">
+        <div className="h-16 border-b border-rule" />
+        <div className="mx-auto flex w-full max-w-202 animate-pulse flex-col gap-5 px-6 pt-7">
+          <div className="h-11 w-72 self-end rounded-[12px_12px_4px_12px] bg-desk" />
+          <div className="h-20 w-full max-w-150 rounded-[4px_12px_12px_12px] bg-desk" />
+          <div className="h-11 w-60 self-end rounded-[12px_12px_4px_12px] bg-desk" />
+        </div>
+      </div>
+    </div>
   );
 }
