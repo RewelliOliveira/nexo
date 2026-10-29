@@ -32,3 +32,14 @@ export function formatRelative(date: Date, now: Date): string {
   if (elapsed < DAY) return relative.format(-Math.floor(elapsed / HOUR), "hour");
   return relative.format(-Math.floor(elapsed / DAY), "day");
 }
+
+/** "16 out" */
+export function formatDay(date: Date): string {
+  return formatDateTime(date).split(",")[0] ?? "";
+}
+
+/** "14:20" when it is today, else "17 out, 14:20" */
+export function formatDeadline(date: Date, now: Date): string {
+  const full = formatDateTime(date);
+  return formatDay(date) === formatDay(now) ? (full.split(", ")[1] ?? full) : full;
+}

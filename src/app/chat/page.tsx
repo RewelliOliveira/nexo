@@ -22,6 +22,7 @@ async function Chat() {
         conversationId={crypto.randomUUID()}
         initialMessages={[]}
         initialState={{ status: "with_agent", employeeMessages: 0, decisions: [] }}
+        renderedAt={new Date().toISOString()}
       />
     </AppShell>
   );
@@ -29,7 +30,7 @@ async function Chat() {
 
 function ChatSkeleton() {
   return (
-    <div role="status" className="flex h-dvh flex-1 bg-paper">
+    <div role="status" className="flex h-dvh bg-paper">
       <span className="sr-only">Carregando sua conversa…</span>
       <div aria-hidden className="hidden w-58 shrink-0 border-r border-rule md:block" />
       <div aria-hidden className="flex flex-1 flex-col">

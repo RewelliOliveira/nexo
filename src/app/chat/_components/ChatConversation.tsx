@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TopBar } from "../../_components/AppShell";
 import { MAX_EMPLOYEE_MESSAGES } from "../../api/chat/prepare-turn";
 import { chatStateSchema, type ChatState, type DecisionView } from "../_lib/chat-state";
-import { textOf } from "../_lib/tool-parts";
+import { textOf, toolCallsOf } from "../_lib/tool-parts";
 import type { DecisionIndex } from "./AgentActions";
 import { AgentMessage, AgentThinking, UserMessage } from "./AgentMessage";
 import { Composer, type ComposerHandle } from "./Composer";
@@ -23,14 +23,18 @@ export type ChatConversationProps = {
   conversationId: string;
   initialMessages: UIMessage[];
   initialState: ChatState;
+  /** When the server rendered the page, ISO; reference for "há 5 dias" */
+  renderedAt: string;
 };
 
 export function ChatConversation({
   conversationId,
   initialMessages,
   initialState,
+  renderedAt,
 }: ChatConversationProps) {
   const [state, setState] = useState(initialState);
+  const now = useMemo(() => new Date(renderedAt), [renderedAt]);
   const composerRef = useRef<ComposerHandle>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -53,16 +57,19 @@ export function ChatConversation({
   });
 
   const decisions = useMemo(() => indexDecisions(state.decisions), [state.decisions]);
+  const ticketsByDraft = useMemo(() => indexTicketsByDraft(messages), [messages]);
   const busy = status === "submitted" || status === "streaming";
+  const open = state.status === "with_agent" && state.employeeMessages < MAX_EMPLOYEE_MESSAGES;
   const last = messages.at(-1);
   const thinking = busy && (last?.role !== "assistant" || !hasContent(last));
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
-  }, [messages, thinking]);
+    // status too: buttons appear under the reply once the stream ends
+  }, [messages, thinking, status]);
 
   function send(text: string) {
-    if (busy) return;
+    if (busy || !open) return;
     setState((current) => ({ ...current, employeeMessages: current.employeeMessages + 1 }));
     void sendMessage({ text });
   }
@@ -80,13 +87,29 @@ export function ChatConversation({
             className="mx-auto flex w-full max-w-202 flex-col gap-5 px-4 pt-7 pb-1 sm:px-6"
           >
             {messages.length === 0 && <EmptyConversation />}
-            {messages.map((message) =>
-              message.role === "user" ? (
-                <UserMessage key={message.id} text={textOf(message)} />
-              ) : (
-                <AgentMessage key={message.id} message={message} decisions={decisions} />
-              ),
-            )}
+            {messages.map((message, index) => {
+              if (message.role === "user") {
+                return <UserMessage key={message.id} text={textOf(message)} />;
+              }
+              const next = messages[index + 1];
+              const latest = index === messages.length - 1;
+              return (
+                <AgentMessage
+                  key={message.id}
+                  message={message}
+                  decisions={decisions}
+                  latest={latest}
+                  interactive={latest && !busy && open}
+                  nextUserText={next?.role === "user" ? textOf(next) : null}
+                  ticketsByDraft={ticketsByDraft}
+                  now={now}
+                  onSend={send}
+                  onCorrectDraft={() =>
+                    composerRef.current?.focus("O que você quer corrigir no rascunho?")
+                  }
+                />
+              );
+            })}
             {thinking && <AgentThinking />}
             <div ref={endRef} />
           </div>
@@ -101,6 +124,18 @@ export function ChatConversation({
       </div>
     </>
   );
+}
+
+function indexTicketsByDraft(messages: UIMessage[]): Map<string, string> {
+  const tickets = new Map<string, string>();
+  for (const message of messages) {
+    for (const call of toolCallsOf(message)) {
+      if (call.draftId && call.state === "done" && call.result?.tool === "createTicket") {
+        tickets.set(call.draftId, call.result.data.ticket.id);
+      }
+    }
+  }
+  return tickets;
 }
 
 function indexDecisions(decisions: DecisionView[]): DecisionIndex {

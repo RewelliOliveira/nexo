@@ -71,6 +71,7 @@ const envelopeSchema = z.union([
 ]);
 
 const ticketIdInputSchema = z.object({ ticketId: z.string() });
+const draftIdInputSchema = z.object({ draftId: z.string() });
 const repliesInputSchema = z.object({ options: z.array(z.string()).min(1) });
 
 export type ToolCall = {
@@ -78,6 +79,8 @@ export type ToolCall = {
   toolName: string;
   /** Number of the ticket the call is about, when the model sent one */
   ticketId: string | null;
+  /** Draft the call creates the ticket from (createTicket) */
+  draftId: string | null;
 } & (
   | { state: "running" }
   | { state: "done"; decisionId: string; result: ToolResult | null }
@@ -125,10 +128,12 @@ function parseToolPart(
   toolName: string,
 ): ToolCall {
   const ticketInput = ticketIdInputSchema.safeParse(part.input);
+  const draftInput = draftIdInputSchema.safeParse(part.input);
   const base = {
     toolCallId: part.toolCallId,
     toolName,
     ticketId: ticketInput.success ? ticketInput.data.ticketId.toUpperCase() : null,
+    draftId: draftInput.success ? draftInput.data.draftId : null,
   };
 
   if (part.state === "output-error") {
