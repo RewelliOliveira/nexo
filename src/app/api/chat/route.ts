@@ -92,26 +92,37 @@ export async function POST(request: Request): Promise<Response> {
   requestContext.set(MASTRA_RESOURCE_ID_KEY, employeeId);
   requestContext.set(MASTRA_THREAD_ID_KEY, conversationId);
 
-  const stream = await handleChatStream({
-    mastra,
-    agentId: NEXO_ASSIST_AGENT_ID,
-    version: "v7",
-    params: {
-      // History comes from memory; only the new message is trusted from the client
-      messages: [lastMessage],
-      requestContext,
-      memory: { thread: conversationId, resource: employeeId },
-      onFinish: async ({ text: reply }) => {
-        if (!reply.trim()) return;
-        const message = await conversations.addMessage(conversationId, "agent", reply);
-        await getDecisionLogService().attachPending(conversationId, message.id);
+  let stream: Awaited<ReturnType<typeof handleChatStream>>;
+  try {
+    stream = await handleChatStream({
+      mastra,
+      agentId: NEXO_ASSIST_AGENT_ID,
+      version: "v7",
+      params: {
+        // History comes from memory; only the new message is trusted from the client
+        messages: [lastMessage],
+        requestContext,
+        memory: { thread: conversationId, resource: employeeId },
+        onFinish: async ({ text: reply }) => {
+          if (!reply.trim()) return;
+          const message = await conversations.addMessage(conversationId, "agent", reply);
+          await getDecisionLogService().attachPending(conversationId, message.id);
+        },
       },
-    },
-    onError: (error) => {
-      console.error("[chat] agent stream failed", error);
-      return "Não consegui responder agora. Tente novamente em instantes.";
-    },
-  });
+      onError: (error) => {
+        console.error("[chat] agent stream failed", error);
+        return "Não consegui responder agora. Tente novamente em instantes.";
+      },
+    });
+  } catch (error) {
+    // The agent did not even start; the employee's message is kept for a retry
+    console.error("[chat] agent could not start", error);
+    return errorResponse(
+      503,
+      "agent_unavailable",
+      "Não consegui responder agora. Tente novamente em instantes.",
+    );
+  }
 
   return createUIMessageStreamResponse({ stream });
 }
