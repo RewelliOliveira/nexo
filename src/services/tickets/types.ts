@@ -8,13 +8,9 @@ import {
   type TicketCategory,
   type TicketUpdate,
 } from "@/db/schema";
+import { HANDOFF_REASONS, type HandoffReason } from "@/lib/domain";
 
-export const HANDOFF_REASONS = [
-  "employee_request",
-  "critical",
-  "overdue",
-  "low_confidence",
-] as const;
+export { HANDOFF_REASONS, type HandoffReason };
 
 export const createTicketInputSchema = z.object({
   title: z.string().trim().min(5).max(120),
@@ -45,7 +41,6 @@ export type CreateTicketInput = z.input<typeof createTicketInputSchema>;
 export type UpdateTicketInput = z.input<typeof updateTicketInputSchema>;
 export type ReopenTicketInput = z.input<typeof reopenTicketInputSchema>;
 export type HandoffInput = z.input<typeof handoffInputSchema>;
-export type HandoffReason = (typeof HANDOFF_REASONS)[number];
 
 export type TicketSummary = Ticket & { isOverdue: boolean };
 export type TicketDetail = TicketSummary & { updates: TicketUpdate[] };

@@ -39,6 +39,12 @@ export const CONVERSATION_STATUSES = [
   "closed",
 ] as const;
 export const MESSAGE_ROLES = ["employee", "agent", "analyst", "system"] as const;
+export const HANDOFF_REASONS = [
+  "employee_request",
+  "critical",
+  "overdue",
+  "low_confidence",
+] as const;
 
 export type EmployeeRole = (typeof EMPLOYEE_ROLES)[number];
 export type TicketType = (typeof TICKET_TYPES)[number];
@@ -46,3 +52,4 @@ export type TicketCategory = (typeof TICKET_CATEGORIES)[number];
 export type TicketPriority = (typeof TICKET_PRIORITIES)[number];
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
 export type ConversationStatus = (typeof CONVERSATION_STATUSES)[number];
+export type HandoffReason = (typeof HANDOFF_REASONS)[number];
