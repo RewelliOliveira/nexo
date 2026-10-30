@@ -36,6 +36,8 @@ export type ChatConversationProps = {
 /** From here on the counter warns that the session is ending. */
 const LIMIT_WARNING_AT = MAX_EMPLOYEE_MESSAGES - 5;
 
+const ANALYST_POLL_INTERVAL_MS = 5000;
+
 export function ChatConversation({
   conversationId,
   initialMessages,
@@ -76,6 +78,17 @@ export function ChatConversation({
   const last = messages.at(-1);
   const thinking = busy && (last?.role !== "assistant" || !hasContent(last));
   const failure = error ? describeChatError(error) : null;
+
+  // With an analyst nothing streams back: polling shows when the analyst
+  // gives the conversation back to the agent or closes it
+  const withAnalyst = state.status === "awaiting_analyst" || state.status === "with_analyst";
+  useEffect(() => {
+    if (!withAnalyst) return;
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshState();
+    }, ANALYST_POLL_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, [withAnalyst, refreshState]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
