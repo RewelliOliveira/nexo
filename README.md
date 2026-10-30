@@ -55,7 +55,7 @@ O login aceita qualquer senha não vazia, já que o protótipo não tem diretór
 ## Arquitetura
 
 ```
-src/app/            Interface e API: chat, console, login, rotas e server actions
+src/app/            Interface e API: chat, console, login, perfil, rotas e server actions
   │ fala só com ↓
 src/agent/          Agent Mastra: instruções, ferramentas, retry e registro de decisões
   │ fala só com ↓
@@ -144,7 +144,7 @@ O que segura o custo por conversa:
 - **Dois bancos.** A memória do agent fica no armazenamento do Mastra, e os dados do negócio ficam num banco próprio, acessado só pelos serviços. O agent pode ser trocado sem mexer nos chamados. O preço é juntar as duas fontes no chat quando um analista participa.
 - **Duplicidade por palavras-chave**, na mesma categoria e do mesmo funcionário. É previsível e testável, mas não pega sinônimos distantes. Embeddings resolveriam, ao custo de mais infraestrutura.
 - **Atualização periódica em vez de WebSocket ou SSE.** É simples e roda em hospedagem serverless, com um atraso de alguns segundos.
-- **Login de protótipo.** E-mail corporativo do diretório e qualquer senha, com sessão em cookie `httpOnly` assinado. Não há senhas reais para validar.
+- **Login de protótipo.** E-mail corporativo do diretório e qualquer senha, com sessão em cookie `httpOnly` assinado. Não há senhas reais para validar. Pelo mesmo motivo, "Redefinir senha", na tela Meu perfil, é simulado: não envia e-mail e avisa isso na tela. A data da última alteração vem dos dados de exemplo.
 
 ## O que faria com mais tempo
 

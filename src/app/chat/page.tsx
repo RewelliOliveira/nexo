@@ -31,7 +31,7 @@ async function Chat() {
     : [EMPTY_CHAT_STATE, []];
 
   return (
-    <AppShell employee={employee}>
+    <AppShell employee={employee} current="chat">
       <ChatScreen
         conversationId={conversationId}
         initialMessages={initialMessages}
