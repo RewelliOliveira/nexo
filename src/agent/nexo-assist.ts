@@ -6,7 +6,7 @@ import { createNexoTools, repliesSuggested } from "./tools";
 
 export const NEXO_ASSIST_AGENT_ID = "nexo-assist";
 
-const DEFAULT_MODEL = "google/gemini-2.5-flash";
+const DEFAULT_MODEL = "openai/gpt-5.4-mini";
 
 // History sent to the model on each turn. Older messages stay in storage;
 // tickets and decisions live in the services, so they are never lost.

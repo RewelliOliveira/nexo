@@ -10,7 +10,7 @@ Pré-requisitos: Node.js 20.9 ou mais novo e uma chave da API do Google Gemini (
 
 ```bash
 npm install
-cp .env.example .env      # preencha GOOGLE_API_KEY e SESSION_SECRET
+cp .env.example .env      # preencha OPENAI_API_KEY e SESSION_SECRET
 npm run db:seed           # cria o banco local com os dados de exemplo
 npm run dev               # http://localhost:3000
 ```
