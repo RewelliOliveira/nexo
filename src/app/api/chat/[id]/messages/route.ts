@@ -5,9 +5,7 @@ import {
   ConversationStateError,
   getConversationService,
 } from "@/services/conversations";
-
-/** Longest message the employee can send to the analyst at once. */
-const MAX_MESSAGE_LENGTH = 4000;
+import { MAX_MESSAGE_LENGTH } from "../../prepare-turn";
 
 const requestSchema = z.object({
   text: z.string().trim().min(1).max(MAX_MESSAGE_LENGTH),

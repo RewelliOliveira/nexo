@@ -8,7 +8,11 @@ import {
   createConversationService,
   type ConversationService,
 } from "@/services/conversations";
-import { MAX_EMPLOYEE_MESSAGES, prepareChatTurn } from "./prepare-turn";
+import {
+  MAX_DAILY_EMPLOYEE_MESSAGES,
+  MAX_EMPLOYEE_MESSAGES,
+  prepareChatTurn,
+} from "./prepare-turn";
 
 const TURN = { employeeId: "emp-ana", conversationId: "conv-1", text: "minha VPN caiu" };
 
@@ -46,6 +50,22 @@ describe("prepareChatTurn", () => {
       expect(await prepareChatTurn(conversations, TURN)).toEqual({ kind: "agent" });
     }
     expect(await prepareChatTurn(conversations, TURN)).toEqual({ kind: "limit_reached" });
+  });
+
+  it("stops after the daily limit, even across new conversations", async () => {
+    for (let i = 0; i < MAX_DAILY_EMPLOYEE_MESSAGES; i++) {
+      const conversationId = `conv-${Math.floor(i / MAX_EMPLOYEE_MESSAGES)}`;
+      expect(await prepareChatTurn(conversations, { ...TURN, conversationId })).toEqual({
+        kind: "agent",
+      });
+    }
+
+    const fresh = { ...TURN, conversationId: "conv-fresh" };
+    expect(await prepareChatTurn(conversations, fresh)).toEqual({ kind: "daily_limit_reached" });
+    expect(await conversations.countMessages("conv-fresh", "employee")).toBe(0);
+    // Each employee has their own limit
+    const other = { ...TURN, employeeId: "emp-bruno", conversationId: "conv-bruno" };
+    expect(await prepareChatTurn(conversations, other)).toEqual({ kind: "agent" });
   });
 
   it("refuses another employee's conversation", async () => {

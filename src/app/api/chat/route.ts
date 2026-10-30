@@ -15,7 +15,11 @@ import {
   getConversationService,
   getDecisionLogService,
 } from "@/services/conversations";
-import { prepareChatTurn } from "./prepare-turn";
+import {
+  MAX_DAILY_EMPLOYEE_MESSAGES,
+  MAX_MESSAGE_LENGTH,
+  prepareChatTurn,
+} from "./prepare-turn";
 
 const requestSchema = z.object({
   // useChat sends the chat id as `id`; it is the conversation id
@@ -60,6 +64,13 @@ export async function POST(request: Request): Promise<Response> {
   if (!text) {
     return errorResponse(400, "invalid_request", "Escreva uma mensagem.");
   }
+  if (text.length > MAX_MESSAGE_LENGTH) {
+    return errorResponse(
+      400,
+      "invalid_request",
+      `Sua mensagem passou de ${MAX_MESSAGE_LENGTH} caracteres. Resuma e envie de novo.`,
+    );
+  }
 
   const conversations = getConversationService();
   let turn;
@@ -82,6 +93,13 @@ export async function POST(request: Request): Promise<Response> {
       429,
       "message_limit",
       "Você atingiu o limite de 30 mensagens desta conversa. Comece uma nova conversa para continuar.",
+    );
+  }
+  if (turn.kind === "daily_limit_reached") {
+    return errorResponse(
+      429,
+      "daily_limit",
+      `Você atingiu o limite de ${MAX_DAILY_EMPLOYEE_MESSAGES} mensagens com o Nexo Assist nas últimas 24 horas. Tente de novo mais tarde.`,
     );
   }
 

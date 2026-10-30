@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   conversations,
@@ -180,6 +180,26 @@ export function createConversationService({
         .from(messages)
         .where(
           and(eq(messages.conversationId, conversationId), eq(messages.role, role)),
+        );
+      return row?.total ?? 0;
+    },
+
+    /**
+     * Messages the employee sent to the agent in all conversations since a
+     * moment. Those written to the service desk never reach the model.
+     */
+    async countSentToAgentSince(employeeId: string, since: Date): Promise<number> {
+      const [row] = await db
+        .select({ total: count() })
+        .from(messages)
+        .innerJoin(conversations, eq(messages.conversationId, conversations.id))
+        .where(
+          and(
+            eq(conversations.employeeId, employeeId),
+            eq(messages.role, "employee"),
+            eq(messages.outsideAgent, false),
+            gte(messages.createdAt, since),
+          ),
         );
       return row?.total ?? 0;
     },

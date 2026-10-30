@@ -36,6 +36,29 @@ describe("conversation service", () => {
     );
   });
 
+  it("counts what the employee sent to the agent across conversations", async () => {
+    const start = new Date("2026-10-21T12:00:00Z");
+    let at = start;
+    const timed = createConversationService({
+      db: await createTestDatabase(start),
+      now: () => at,
+    });
+    await timed.getOrCreate("emp-ana", "conv-1");
+    await timed.getOrCreate("emp-ana", "conv-2");
+    await timed.getOrCreate("emp-bruno", "conv-3");
+
+    await timed.addMessage("conv-1", "employee", "antes da janela");
+    at = new Date("2026-10-22T12:00:00Z");
+    await timed.addMessage("conv-1", "employee", "dentro da janela");
+    await timed.addMessage("conv-2", "employee", "em outra conversa");
+    await timed.addMessage("conv-2", "agent", "resposta não conta");
+    await timed.addMessage("conv-2", "employee", "para o analista", { outsideAgent: true });
+    await timed.addMessage("conv-3", "employee", "de outra pessoa");
+
+    expect(await timed.countSentToAgentSince("emp-ana", at)).toBe(2);
+    expect(await timed.countSentToAgentSince("emp-ana", start)).toBe(3);
+  });
+
   it("finds the latest conversation of the employee", async () => {
     let tick = 0;
     conversations = createConversationService({

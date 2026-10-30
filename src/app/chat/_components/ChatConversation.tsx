@@ -231,6 +231,16 @@ export function ChatConversation({
                 {failure.message}
               </ChatNotice>
             )}
+            {failure?.kind === "daily_limit" && (
+              <ChatNotice
+                role="alert"
+                tone="neutral"
+                icon={CircleSlash}
+                title="Limite diário atingido"
+              >
+                {failure.message}
+              </ChatNotice>
+            )}
             {deskError && (
               <ChatNotice
                 role="alert"

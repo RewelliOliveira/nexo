@@ -19,6 +19,13 @@ describe("chat errors", () => {
     });
   });
 
+  it("does not offer a retry that would hit the daily limit again", () => {
+    expect(describeChatError(apiError("daily_limit", "Tente mais tarde."))).toEqual({
+      kind: "daily_limit",
+      message: "Tente mais tarde.",
+    });
+  });
+
   it("shows the message the route wrote for the employee", () => {
     expect(
       describeChatError(new Error("Não consegui responder agora. Tente novamente em instantes.")),
