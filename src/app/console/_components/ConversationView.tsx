@@ -16,6 +16,7 @@ import {
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button } from "../../_components/Button";
 import { formatTime } from "../../_lib/format";
+import { Composer } from "../../chat/_components/Composer";
 import { RichText } from "../../chat/_components/RichText";
 import type {
   ConversationDetail,
@@ -36,6 +37,8 @@ type ConversationViewProps = {
   pending: ConsoleAction | null;
   error: string | null;
   onAction(action: ConsoleAction): void;
+  /** Sends a message to the employee; false when it was not delivered */
+  onReply(text: string): Promise<boolean>;
   onBack(): void;
   /** Header button that shows the tickets panel when it is hidden */
   ticketsToggle?: ReactNode;
@@ -49,6 +52,7 @@ export function ConversationView({
   pending,
   error,
   onAction,
+  onReply,
   onBack,
   ticketsToggle,
 }: ConversationViewProps) {
@@ -166,6 +170,7 @@ export function ConversationView({
         pending={pending}
         error={error}
         onAction={onAction}
+        onReply={onReply}
       />
     </main>
   );
@@ -209,7 +214,7 @@ function HistoryEntry({
     <div className={`flex flex-col items-end gap-1 ${first ? "pt-4" : "pt-0.75"}`}>
       {first && (
         <p className="flex items-center gap-1.5 px-1 text-[12px] font-semibold text-ink-2">
-          {agent ? "Nexo Assist" : (conversation.analystName ?? "Analista")}
+          {agent ? "Nexo Assist" : (message.authorName ?? conversation.analystName ?? "Analista")}
           <span
             className={`rounded-sm px-1.5 py-px text-[11px] font-semibold ${agent ? "bg-primary-soft text-primary-text" : "bg-success-soft text-success-text"}`}
           >
@@ -359,9 +364,17 @@ type FooterProps = {
   pending: ConsoleAction | null;
   error: string | null;
   onAction(action: ConsoleAction): void;
+  onReply(text: string): Promise<boolean>;
 };
 
-function ConversationFooter({ conversation, mine, pending, error, onAction }: FooterProps) {
+function ConversationFooter({
+  conversation,
+  mine,
+  pending,
+  error,
+  onAction,
+  onReply,
+}: FooterProps) {
   const name = firstName(conversation.employee.name);
   const handoffTime = conversation.handedOffAt
     ? formatTime(new Date(conversation.handedOffAt))
@@ -395,12 +408,13 @@ function ConversationFooter({ conversation, mine, pending, error, onAction }: Fo
       );
       break;
     case "with_analyst":
+      // The agent is paused: whoever took the conversation answers here
       bar = mine ? (
-        <FooterRow
-          icon={Headset}
-          tone="bg-primary-soft text-primary-text"
-          title={`Você está atendendo ${name}`}
-          body="O agent está pausado. Devolva ao agent ou encerre quando terminar."
+        <Composer
+          onSend={onReply}
+          busy={pending !== null}
+          placeholder={`Escreva para ${name}…`}
+          label={`Mensagem para ${conversation.employee.name}`}
         />
       ) : (
         <FooterRow

@@ -15,6 +15,7 @@ import {
   assumeConversation,
   closeConversation,
   releaseConversation,
+  replyToConversation,
   type ConsoleActionResult,
 } from "../actions";
 import { ConsoleRail } from "./ConsoleRail";
@@ -113,6 +114,23 @@ export function ConsoleScreen({
     setPending(null);
   }
 
+  /** Sends the analyst's message; false keeps the text in the composer. */
+  async function reply(text: string): Promise<boolean> {
+    const conversationId = selectedRef.current;
+    if (!conversationId) return false;
+    setActionError(null);
+    let delivered = false;
+    try {
+      const result = await replyToConversation(conversationId, text);
+      delivered = result.ok;
+      if (!result.ok) setActionError(result.error.message);
+    } catch {
+      setActionError("Não consegui enviar a mensagem. Confira a conexão e tente de novo.");
+    }
+    await Promise.all([refreshList(), refreshDetail(conversationId)]);
+    return delivered;
+  }
+
   return (
     <>
       <ConsoleRail
@@ -137,6 +155,7 @@ export function ConsoleScreen({
           pending={pending}
           error={actionError}
           onAction={(action) => void act(action)}
+          onReply={reply}
           onBack={() => select(null)}
           ticketsToggle={
             !ticketsOpen && (

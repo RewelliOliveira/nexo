@@ -5,7 +5,7 @@ import { buildTimeline } from "./timeline";
 const NOW = new Date("2026-10-28T15:00:00Z");
 
 function message(id: string, role: HistoryMessage["role"], createdAt: string): HistoryMessage {
-  return { id, role, content: id, createdAt, decisions: [] };
+  return { id, role, content: id, createdAt, authorName: null, decisions: [] };
 }
 
 function detail(

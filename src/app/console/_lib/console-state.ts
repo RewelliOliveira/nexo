@@ -41,6 +41,8 @@ export const historyMessageSchema = z.object({
   role: z.enum(MESSAGE_ROLES),
   content: z.string(),
   createdAt: z.iso.datetime(),
+  /** Analyst who wrote it */
+  authorName: z.string().nullable(),
   /** What the agent decided while writing this reply */
   decisions: z.array(decisionViewSchema),
 });

@@ -55,6 +55,7 @@ export async function loadConversationDetail(conversationId: string): Promise<Co
         role: message.role,
         content: message.content,
         createdAt: message.createdAt.toISOString(),
+        authorName: message.authorName,
         decisions: (byMessage.get(message.id) ?? []).map(toDecisionView),
       }),
     ),
