@@ -5,7 +5,9 @@ import {
   conversations,
   ticketUpdates,
   tickets,
+  TICKET_STATUSES,
   type Ticket,
+  type TicketStatus,
   type TicketType,
 } from "@/db/schema";
 import { isSameProblem } from "./duplicates";
@@ -18,10 +20,12 @@ import {
 } from "./errors";
 import { ACTIVE_STATUSES, computeDueAt, isActiveStatus, isOverdue } from "./sla";
 import {
+  changeStatusInputSchema,
   createTicketInputSchema,
   handoffInputSchema,
   reopenTicketInputSchema,
   updateTicketInputSchema,
+  type ChangeStatusInput,
   type CreateTicketInput,
   type HandoffInput,
   type HandoffResult,
@@ -312,6 +316,51 @@ export function createTicketService({
     },
 
     /**
+     * An analyst moves the ticket of an employee, within nextStatuses. Going
+     * back to work on a resolved ticket reopens it, with a new deadline.
+     */
+    async changeStatus(
+      employeeId: string,
+      ticketId: string,
+      input: ChangeStatusInput,
+    ): Promise<TicketDetail> {
+      callLegacySystem();
+      const data = parseInput(changeStatusInputSchema, input);
+      const ticket = await findOwnedTicket(employeeId, ticketId);
+      const changedAt = now();
+
+      if (!nextStatuses(ticket, changedAt).includes(data.status)) {
+        throw new InvalidStateError(
+          `ticket ${ticketId} cannot go from ${ticket.status} to ${data.status}`,
+        );
+      }
+      const reopened = ticket.status === "resolved" && isActiveStatus(data.status);
+
+      await db.batch([
+        db
+          .update(tickets)
+          .set({
+            status: data.status,
+            updatedAt: changedAt,
+            ...(data.status === "resolved" ? { resolvedAt: changedAt } : {}),
+            ...(reopened
+              ? { resolvedAt: null, dueAt: computeDueAt(ticket.priority, changedAt) }
+              : {}),
+          })
+          .where(eq(tickets.id, ticket.id)),
+        db.insert(ticketUpdates).values({
+          ticketId: ticket.id,
+          authorType: "analyst",
+          kind: reopened ? "reopened" : "status_change",
+          content: data.note,
+          createdAt: changedAt,
+        }),
+      ]);
+
+      return getDetail(employeeId, ticket.id);
+    },
+
+    /**
      * Hands the conversation over to an analyst. From now on the agent must
      * not reply until an analyst releases it.
      */
@@ -394,6 +443,26 @@ export type TicketService = ReturnType<typeof createTicketService>;
 
 export function canReopen(resolvedAt: Date, at: Date): boolean {
   return at.getTime() - resolvedAt.getTime() <= REOPEN_WINDOW_DAYS * DAY;
+}
+
+/**
+ * Where an analyst can move a ticket: closed is final, a resolved ticket
+ * follows the same reopen window as the employee's, and only requests
+ * (REQ) get approved.
+ */
+export function nextStatuses(
+  ticket: Pick<Ticket, "type" | "status" | "resolvedAt">,
+  at: Date,
+): TicketStatus[] {
+  if (ticket.status === "closed") return [];
+  const canWork =
+    ticket.status !== "resolved" ||
+    (ticket.resolvedAt !== null && canReopen(ticket.resolvedAt, at));
+  return TICKET_STATUSES.filter((status) => {
+    if (status === ticket.status) return false;
+    if (status === "approved" && ticket.type !== "REQ") return false;
+    return canWork || !isActiveStatus(status);
+  });
 }
 
 function parseInput<T extends z.ZodType>(schema: T, input: unknown): z.output<T> {

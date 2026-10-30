@@ -6,6 +6,7 @@ export * from "./types";
 export { computeDueAt, isOverdue, SLA_BY_PRIORITY } from "./sla";
 export {
   createTicketService,
+  nextStatuses,
   REOPEN_WINDOW_DAYS,
   type TicketService,
   type TicketServiceOptions,
