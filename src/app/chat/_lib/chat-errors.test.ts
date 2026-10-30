@@ -1,0 +1,61 @@
+import { describe, expect, it } from "vitest";
+import { describeChatError, isAgentPaused } from "./chat-errors";
+
+const apiError = (code: string, message: string) =>
+  new Error(JSON.stringify({ error: { code, message } }));
+
+describe("chat errors", () => {
+  it("leaves refusals the conversation status already explains", () => {
+    expect(describeChatError(apiError("agent_paused", "transferida"))).toEqual({
+      kind: "explained",
+    });
+    expect(describeChatError(apiError("message_limit", "limite"))).toEqual({ kind: "explained" });
+  });
+
+  it("asks to sign in again when the session is gone", () => {
+    expect(describeChatError(apiError("unauthenticated", "Entre de novo."))).toEqual({
+      kind: "signed_out",
+      message: "Entre de novo.",
+    });
+  });
+
+  it("does not offer a retry that would hit the daily limit again", () => {
+    expect(describeChatError(apiError("daily_limit", "Tente mais tarde."))).toEqual({
+      kind: "daily_limit",
+      message: "Tente mais tarde.",
+    });
+  });
+
+  it("shows the message the route wrote for the employee", () => {
+    expect(
+      describeChatError(new Error("Não consegui responder agora. Tente novamente em instantes.")),
+    ).toMatchObject({ kind: "retry", message: expect.stringContaining("Não consegui") });
+  });
+
+  it("explains a lost connection", () => {
+    expect(describeChatError(new TypeError("Failed to fetch"))).toMatchObject({
+      kind: "retry",
+      title: "Sem conexão com o Nexo Assist",
+    });
+  });
+
+  it("does not blame the connection when the server failed", () => {
+    expect(describeChatError(new Error("Failed to fetch the chat response."))).toMatchObject({
+      kind: "retry",
+      title: "Não consegui responder",
+      message: "Não consegui responder agora. Tente novamente em instantes.",
+    });
+  });
+
+  it("never shows raw technical output", () => {
+    const failure = describeChatError(new Error('{"unexpected": true}'));
+    expect(failure).toMatchObject({ kind: "retry" });
+    expect(JSON.stringify(failure)).not.toContain("unexpected");
+  });
+
+  it("tells when an analyst has the conversation", () => {
+    expect(isAgentPaused(apiError("agent_paused", "transferida"))).toBe(true);
+    expect(isAgentPaused(apiError("message_limit", "limite"))).toBe(false);
+    expect(isAgentPaused(new Error("stream failed"))).toBe(false);
+  });
+});
