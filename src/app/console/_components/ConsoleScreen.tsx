@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, MessagesSquare } from "lucide-react";
+import { Loader2, MessagesSquare, Ticket } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import type { z } from "zod";
 import type { Employee } from "@/db/schema";
@@ -20,6 +20,7 @@ import {
 import { ConsoleRail } from "./ConsoleRail";
 import { ConversationList } from "./ConversationList";
 import { ConversationView, type ConsoleAction } from "./ConversationView";
+import { TicketPanel } from "./TicketPanel";
 
 const ACTIONS: Record<ConsoleAction, (conversationId: string) => Promise<ConsoleActionResult>> = {
   assume: assumeConversation,
@@ -51,6 +52,7 @@ export function ConsoleScreen({
   const [now, setNow] = useState(() => new Date(renderedAt));
   const [pending, setPending] = useState<ConsoleAction | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [ticketsOpen, setTicketsOpen] = useState(true);
   // Answers for a conversation the analyst already left are dropped
   const selectedRef = useRef(initialSelectedId);
 
@@ -136,6 +138,18 @@ export function ConsoleScreen({
           error={actionError}
           onAction={(action) => void act(action)}
           onBack={() => select(null)}
+          ticketsToggle={
+            !ticketsOpen && (
+              <button
+                type="button"
+                onClick={() => setTicketsOpen(true)}
+                className="hidden size-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-ink-2 hover:bg-desk focus-visible:outline-2 focus-visible:outline-cta xl:flex"
+              >
+                <Ticket aria-hidden className="size-4.5" />
+                <span className="sr-only">Mostrar chamados do funcionário</span>
+              </button>
+            )
+          }
         />
       ) : (
         <main
@@ -150,6 +164,9 @@ export function ConsoleScreen({
             </>
           )}
         </main>
+      )}
+      {detail && ticketsOpen && (
+        <TicketPanel detail={detail} onClose={() => setTicketsOpen(false)} />
       )}
     </>
   );

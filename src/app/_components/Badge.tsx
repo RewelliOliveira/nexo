@@ -107,3 +107,13 @@ export function ConversationStatusBadge({ status }: { status: ConversationStatus
     />
   );
 }
+
+/** Just the colored dot of a ticket status, for dense lists. */
+export function TicketStatusDot({ status }: { status: TicketStatus }) {
+  return (
+    <span
+      aria-hidden
+      className={`size-1.75 shrink-0 rounded-full ${DOT_CLASS[TICKET_STATUS_TONE[status]]}`}
+    />
+  );
+}
