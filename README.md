@@ -47,6 +47,7 @@ O login aceita qualquer senha não vazia, já que o protótipo não tem diretór
 | `npm test` | Testes unitários, de serviços e de cenários do agent (Vitest, sem chamar o LLM) |
 | `npm run typecheck` / `npm run lint` | TypeScript estrito e ESLint |
 | `npm run db:seed` | Recria o banco do zero com os dados de exemplo e aplica as migrations |
+| `npm run db:migrate` | Aplica as migrations pendentes sem apagar os dados |
 | `npm run db:generate` | Gera uma migration a partir de `src/db/schema.ts` |
 | `npm run studio` | Mastra Studio para conversar com o agent fora da interface, com presets de funcionário logado |
 
@@ -170,6 +171,8 @@ A aplicação roda na **Vercel** com dois bancos **Turso**: `nexo` para os dados
 | `SESSION_SECRET` | Pelo menos 32 caracteres, gerado como em [Como rodar](#como-rodar) |
 | `DATABASE_URL` / `DATABASE_AUTH_TOKEN` | Banco `nexo` |
 | `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` | Banco `nexo-memory` |
+
+Ao publicar uma versão com migration nova, rode `npm run db:migrate` no banco `nexo` antes do deploy.
 
 `AGENT_MODEL` e `TICKET_SERVICE_FAILURE_RATE` são opcionais. O prazo dos dados de exemplo é relativo à data do seed, então vale rodá-lo de novo perto de uma demonstração: passados 3 dias, por exemplo, o INC-20150 sai da janela de reabertura.
 
