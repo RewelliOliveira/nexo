@@ -1,0 +1,1 @@
+ALTER TABLE `conversations` ADD `analyst_typing_at` integer;

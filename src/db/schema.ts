@@ -97,6 +97,8 @@ export const conversations = sqliteTable(
       .notNull()
       .default("with_agent"),
     analystId: text("analyst_id").references(() => employees.id),
+    // Last keystroke of the analyst; kept here so every serverless instance sees it
+    analystTypingAt: integer("analyst_typing_at", { mode: "timestamp_ms" }),
     // Filled when the conversation is handed off to an analyst
     handoffReason: text("handoff_reason", { enum: HANDOFF_REASONS }),
     handoffSummary: text("handoff_summary"),
