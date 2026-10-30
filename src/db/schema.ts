@@ -32,6 +32,8 @@ export const employees = sqliteTable("employees", {
   name: text("name").notNull(),
   department: text("department").notNull(),
   role: text("role", { enum: EMPLOYEE_ROLES }).notNull().default("employee"),
+  // Null when the directory does not know it
+  passwordChangedAt: integer("password_changed_at", { mode: "timestamp_ms" }),
   createdAt: createdAt(),
 });
 

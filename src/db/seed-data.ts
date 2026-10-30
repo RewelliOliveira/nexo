@@ -20,6 +20,7 @@ export const SEED_EMPLOYEES = [
     name: "Ana Souza",
     department: "Financeiro",
     role: "employee",
+    passwordAgeDays: 42,
   },
   {
     id: "emp-bruno",
@@ -27,6 +28,7 @@ export const SEED_EMPLOYEES = [
     name: "Bruno Lima",
     department: "Comercial",
     role: "employee",
+    passwordAgeDays: 15,
   },
   {
     id: "emp-carla",
@@ -34,6 +36,7 @@ export const SEED_EMPLOYEES = [
     name: "Carla Mendes",
     department: "Marketing",
     role: "employee",
+    passwordAgeDays: 78,
   },
   {
     id: "emp-diego",
@@ -41,6 +44,7 @@ export const SEED_EMPLOYEES = [
     name: "Diego Rocha",
     department: "Jurídico",
     role: "employee",
+    passwordAgeDays: 5,
   },
   {
     id: "emp-marina",
@@ -48,6 +52,7 @@ export const SEED_EMPLOYEES = [
     name: "Marina Alves",
     department: "Service Desk",
     role: "analyst",
+    passwordAgeDays: 30,
   },
 ] as const;
 
@@ -158,7 +163,8 @@ export function buildSeedTickets(now: Date): SeedTicket[] {
         {
           authorType: "analyst",
           kind: "status_change",
-          content: "Encaminhado para o time de suporte N2 para análise do equipamento.",
+          content:
+            "Encaminhado para o time de suporte N2 para análise do equipamento.",
           createdAt: at(-6 * DAY),
         },
       ],
@@ -189,7 +195,8 @@ export function buildSeedTickets(now: Date): SeedTicket[] {
         {
           authorType: "analyst",
           kind: "status_change",
-          content: "Pedido aprovado pelo gestor. Aguardando envio do equipamento.",
+          content:
+            "Pedido aprovado pelo gestor. Aguardando envio do equipamento.",
           createdAt: at(-2 * DAY),
         },
       ],
@@ -288,7 +295,8 @@ export function buildSeedTickets(now: Date): SeedTicket[] {
       priority: "medium",
       status: "open",
       title: "Notebook lento após atualização do Windows",
-      description: "O notebook ficou muito lento depois da atualização de ontem.",
+      description:
+        "O notebook ficou muito lento depois da atualização de ontem.",
       affected: "Apenas eu",
       createdAt: at(-1 * DAY),
       updatedAt: at(-1 * DAY),
@@ -311,7 +319,8 @@ export function buildSeedTickets(now: Date): SeedTicket[] {
       priority: "low",
       status: "open",
       title: "Acesso ao Power BI de campanhas",
-      description: "Preciso de acesso de leitura ao workspace de campanhas no Power BI.",
+      description:
+        "Preciso de acesso de leitura ao workspace de campanhas no Power BI.",
       affected: "Apenas eu",
       createdAt: at(-1 * DAY),
       updatedAt: at(-1 * DAY),
@@ -341,21 +350,34 @@ export async function resetDatabase(db: Database): Promise<void> {
   await db.run(sql`PRAGMA foreign_keys = ON`);
 }
 
-export async function seedDatabase(db: Database, now = new Date()): Promise<void> {
+export async function seedDatabase(
+  db: Database,
+  now = new Date(),
+): Promise<void> {
   const seedTickets = buildSeedTickets(now);
 
-  await db.insert(employees).values(
-    SEED_EMPLOYEES.map((employee) => ({ ...employee, createdAt: now })),
-  );
+  await db
+    .insert(employees)
+    .values(
+      SEED_EMPLOYEES.map(({ passwordAgeDays, ...employee }) => ({
+        ...employee,
+        passwordChangedAt: new Date(now.getTime() - passwordAgeDays * DAY),
+        createdAt: now,
+      })),
+    );
   await db
     .insert(kbArticles)
-    .values(SEED_KB_ARTICLES.map((article) => ({ ...article, createdAt: now })));
+    .values(
+      SEED_KB_ARTICLES.map((article) => ({ ...article, createdAt: now })),
+    );
   await db
     .insert(tickets)
     .values(seedTickets.map(({ updates, ...ticket }) => ticket));
-  await db.insert(ticketUpdates).values(
-    seedTickets.flatMap((ticket) =>
-      ticket.updates.map((update) => ({ ...update, ticketId: ticket.id })),
-    ),
-  );
+  await db
+    .insert(ticketUpdates)
+    .values(
+      seedTickets.flatMap((ticket) =>
+        ticket.updates.map((update) => ({ ...update, ticketId: ticket.id })),
+      ),
+    );
 }
