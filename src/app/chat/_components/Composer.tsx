@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowUp } from "lucide-react";
-import { useImperativeHandle, useRef, useState, type Ref } from "react";
+import { useId, useImperativeHandle, useRef, useState, type Ref } from "react";
 
 export type ComposerHandle = {
   /** Focuses the field, optionally with a hint, e.g. to correct a draft */
@@ -10,34 +10,49 @@ export type ComposerHandle = {
 
 type ComposerProps = {
   ref?: Ref<ComposerHandle>;
-  onSend(text: string): void;
-  /** Agent busy: typing is allowed, sending waits */
+  /** Resolving to false puts the text back, e.g. when it was not delivered */
+  onSend(text: string): void | Promise<boolean>;
+  /** Busy: typing is allowed, sending waits */
   busy: boolean;
-  /** Blocked for good (transferred, closed, limit): shows why instead */
+  /** Blocked for good (closed, limit): shows why instead */
   disabledReason?: string;
+  placeholder?: string;
+  /** Accessible name of the field */
+  label?: string;
 };
 
 const DEFAULT_PLACEHOLDER = "Escreva para o Nexo…";
 
-export function Composer({ ref, onSend, busy, disabledReason }: ComposerProps) {
+export function Composer({
+  ref,
+  onSend,
+  busy,
+  disabledReason,
+  placeholder: basePlaceholder = DEFAULT_PLACEHOLDER,
+  label = "Mensagem para o Nexo Assist",
+}: ComposerProps) {
   const [text, setText] = useState("");
-  const [placeholder, setPlaceholder] = useState(DEFAULT_PLACEHOLDER);
+  const [hint, setHint] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const id = useId();
   const disabled = disabledReason !== undefined;
   const canSend = !disabled && !busy && text.trim().length > 0;
 
   useImperativeHandle(ref, () => ({
-    focus(hint) {
-      if (hint) setPlaceholder(hint);
+    focus(placeholder) {
+      if (placeholder) setHint(placeholder);
       inputRef.current?.focus();
     },
   }));
 
   function send() {
     if (!canSend) return;
-    onSend(text.trim());
+    const sent = text.trim();
     setText("");
-    setPlaceholder(DEFAULT_PLACEHOLDER);
+    setHint(null);
+    void Promise.resolve(onSend(sent)).then((delivered) => {
+      if (delivered === false) setText((current) => current || sent);
+    });
   }
 
   return (
@@ -52,16 +67,16 @@ export function Composer({ ref, onSend, busy, disabledReason }: ComposerProps) {
           : "border-ink/12 bg-paper focus-within:border-cta focus-within:ring-[0.5px] focus-within:ring-cta"
       }`}
     >
-      <label htmlFor="composer" className="sr-only">
-        Mensagem para o Nexo Assist
+      <label htmlFor={id} className="sr-only">
+        {label}
       </label>
       <textarea
-        id="composer"
+        id={id}
         ref={inputRef}
         rows={1}
         value={text}
         disabled={disabled}
-        placeholder={disabledReason ?? placeholder}
+        placeholder={disabledReason ?? hint ?? basePlaceholder}
         onChange={(event) => setText(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
