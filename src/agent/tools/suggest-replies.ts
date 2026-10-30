@@ -24,12 +24,19 @@ export const suggestReplies = createTool({
   execute: async () => ({ shown: true as const }),
 });
 
-/** Ends the turn once quick replies are shown: the employee answers next. */
-export function repliesSuggested({
+// Each step is a paid model call: a model that keeps calling tools stops here
+export const MAX_TURN_STEPS = 8;
+
+/**
+ * Ends the turn once quick replies are shown, since the employee answers
+ * next, or when it reaches the step limit.
+ */
+export function turnFinished({
   steps,
 }: {
   steps: ReadonlyArray<{ toolCalls: ReadonlyArray<{ toolName: string }> }>;
 }): boolean {
+  if (steps.length >= MAX_TURN_STEPS) return true;
   return (
     steps.at(-1)?.toolCalls.some((call) => call.toolName === SUGGEST_REPLIES_TOOL_ID) ?? false
   );
