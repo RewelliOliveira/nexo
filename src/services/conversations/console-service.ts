@@ -135,7 +135,7 @@ export function createConsoleService({
     const at = now();
     const updated = await db
       .update(conversations)
-      .set({ ...to, updatedAt: at })
+      .set({ ...to, analystTypingAt: null, updatedAt: at })
       .where(
         and(eq(conversations.id, conversationId), allowed),
       )
@@ -194,6 +194,17 @@ export function createConsoleService({
         .where(eq(conversations.id, conversationId));
     },
 
+    /**
+     * The analyst is writing. Does not touch updatedAt: typing is not activity
+     * that should reorder the list. Ignored once the conversation left them.
+     */
+    async markTyping(conversationId: string, analyst: Analyst): Promise<void> {
+      await db
+        .update(conversations)
+        .set({ analystTypingAt: now() })
+        .where(and(eq(conversations.id, conversationId), takenBy(analyst)));
+    },
+
     /** Pauses the agent: from now on only the analyst answers. */
     async assume(conversationId: string, analyst: Analyst): Promise<ConsoleConversation> {
       return transition(
@@ -215,7 +226,7 @@ export function createConsoleService({
       // still this analyst's
       const updated = await db
         .update(conversations)
-        .set({ updatedAt: at })
+        .set({ analystTypingAt: null, updatedAt: at })
         .where(and(eq(conversations.id, conversationId), takenBy(analyst)))
         .returning({ id: conversations.id });
       if (updated.length === 0) {

@@ -10,6 +10,7 @@ import {
 } from "./decision-log-service";
 
 export {
+  ANALYST_TYPING_TTL_MS,
   ConversationNotFoundError,
   ConversationStateError,
   createConversationService,

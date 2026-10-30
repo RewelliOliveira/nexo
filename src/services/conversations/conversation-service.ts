@@ -37,6 +37,12 @@ export class ConversationStateError extends Error {
   }
 }
 
+/**
+ * How long a keystroke of the analyst counts as typing. Outlasts the gap
+ * between the console's signals, so the dots do not blink while they write.
+ */
+export const ANALYST_TYPING_TTL_MS = 4000;
+
 /** While here the employee talks to the service desk instead of the agent. */
 const WITH_SERVICE_DESK: readonly ConversationStatus[] = ["awaiting_analyst", "with_analyst"];
 
@@ -172,6 +178,15 @@ export function createConversationService({
      */
     async listOutsideAgent(conversationId: string): Promise<AuthoredMessage[]> {
       return listAuthoredMessages(db, conversationId, { outsideAgentOnly: true });
+    },
+
+    /** Name of the analyst typing right now, if any. */
+    async findTypingAnalyst(conversation: Conversation): Promise<string | null> {
+      const { analystId, analystTypingAt, status } = conversation;
+      if (status !== "with_analyst" || !analystId || !analystTypingAt) return null;
+      if (now().getTime() - analystTypingAt.getTime() >= ANALYST_TYPING_TTL_MS) return null;
+      const analyst = await db.query.employees.findFirst({ where: eq(employees.id, analystId) });
+      return analyst?.name ?? null;
     },
 
     async countMessages(conversationId: string, role: MessageRole): Promise<number> {
