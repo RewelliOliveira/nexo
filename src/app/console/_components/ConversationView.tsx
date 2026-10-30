@@ -424,7 +424,7 @@ function ConversationFooter({ conversation, mine, pending, error, onAction }: Fo
   }
 
   return (
-    <div className="flex shrink-0 flex-col gap-2.5 border-t border-rule bg-paper px-4 pt-3 pb-3.5 sm:px-5">
+    <div className="@container flex shrink-0 flex-col gap-2.5 border-t border-rule bg-paper px-4 pt-3 pb-3.5 sm:px-5">
       {error && (
         <p role="alert" className="rounded-[8px] bg-danger-soft px-3 py-2 text-[13px] text-danger-text">
           {error}
@@ -449,15 +449,15 @@ function FooterRow({
   children?: ReactNode;
 }) {
   return (
-    <div role="status" className="flex flex-wrap items-center gap-3">
+    <div role="status" className="flex flex-wrap items-center gap-3 @2xl:flex-nowrap">
       <span className={`flex size-9 shrink-0 items-center justify-center rounded-full ${tone}`}>
         <Icon aria-hidden className="size-4.25" />
       </span>
-      <div className="flex min-w-0 flex-1 basis-48 flex-col gap-0.5">
+      <div className="flex min-w-0 flex-1 basis-56 flex-col gap-0.5">
         <p className="text-[14.5px] font-semibold text-ink">{title}</p>
         <p className="text-[12.5px] text-ink-3">{body}</p>
       </div>
-      {children && <div className="flex shrink-0 items-center gap-2">{children}</div>}
+      {children && <div className="ml-auto flex shrink-0 items-center gap-2">{children}</div>}
     </div>
   );
 }
