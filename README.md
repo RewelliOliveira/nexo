@@ -6,7 +6,7 @@ Desafio técnico do processo seletivo Beyond the Bytes. Especificação em [`doc
 
 ## Como rodar
 
-Pré-requisitos: Node.js 20.9 ou mais novo e uma chave da API do Google Gemini ([gere aqui](https://aistudio.google.com/apikey), há cota gratuita).
+Pré-requisitos: Node.js 20.9 ou mais novo e uma chave da API da OpenAI ([gere aqui](https://platform.openai.com/api-keys)).
 
 ```bash
 npm install
@@ -69,7 +69,7 @@ src/db/             Schema Drizzle, migrations e dados de exemplo
 ```
 
 - **Next.js 16 (App Router).** As páginas leem o banco e a sessão a cada requisição (Cache Components com `<Suspense>`), e nenhum dado de conversa ou chamado vai para o cache.
-- **Mastra** roda o agent. A memória fica numa thread por conversa, em libSQL (`mastra.db`), e o `resourceId` é o funcionário logado. Assim o Mastra recusa uma thread que não pertence a ele.
+- **Mastra** roda o agent. A memória fica numa thread por conversa, em libSQL (`mastra.db` em desenvolvimento, um segundo banco Turso no deploy), e o `resourceId` é o funcionário logado. Assim o Mastra recusa uma thread que não pertence a ele. Os traces do Mastra Studio ficam num arquivo DuckDB só em desenvolvimento, porque as funções serverless não têm disco gravável. Em produção, o registro de decisões continua no banco.
 - **libSQL + Drizzle** guardam os dados do sistema (`nexo.db`): funcionários, artigos, chamados e o histórico deles, conversas com estado (`with_agent`, `awaiting_analyst`, `with_analyst`, `closed`), mensagens e o log de decisões. Em desenvolvimento é um arquivo local; no deploy, Turso.
 - **Streaming:** o chat usa `useChat` do AI SDK e a rota `/api/chat` repassa o stream do Mastra. Do cliente só se aceita a última mensagem, e o histórico vem da memória do servidor.
 - **Atualização sem WebSocket:** console e chat consultam o estado periodicamente (5 s com analista, 15 s com o agent) e pausam quando a aba não está visível. É simples, funciona em qualquer hospedagem e basta para o volume de um service desk.
@@ -101,7 +101,7 @@ O prompt orienta a conversa: uma pergunta por vez, classificação de tipo, cate
 | Agent calado com analista | A rota do chat não chama o modelo se a conversa não está `with_agent`. A mensagem do funcionário é guardada para o analista. |
 | Pouca segurança | Criar, atualizar ou reabrir chamado com `confidence < 0.5` é bloqueado. A transferência não, porque é o caminho certo quando falta segurança. |
 | Privacidade | O id do funcionário vem da sessão (cookie assinado com HMAC), nunca do modelo. Toda consulta do serviço filtra por ele, e chamado de outra pessoa responde "não encontrado", sem confirmar que existe. |
-| Limite de 30 mensagens | Contado no servidor antes de chamar o modelo |
+| Limite de 30 mensagens | Contado no servidor antes de chamar o modelo, junto com o limite diário por funcionário |
 
 O escopo (só TI) é a única regra que fica no prompt. Não há ação a bloquear, o agent apenas responde e redireciona.
 
@@ -114,14 +114,15 @@ Toda ferramenta exige do modelo `intent` (o que entendeu), `confidence` (0 a 1) 
 
 ## Modelo e custo
 
-O padrão é **Gemini 2.5 Flash**, configurável por `AGENT_MODEL` com qualquer id do Mastra (`openai/gpt-4.1-mini`, `anthropic/claude-haiku-4-5`…), com a chave do provedor correspondente no `.env`. O caso pede raciocínio curto com ferramentas e respostas rápidas, e um modelo pequeno e barato dá conta porque as regras que importam estão no código, não na esperteza do modelo.
+O padrão é **GPT-5.4 mini** (`openai/gpt-5.4-mini`), configurável por `AGENT_MODEL` com qualquer id do Mastra (`google/gemini-2.5-flash`, `anthropic/claude-haiku-4-5`…), com a chave do provedor correspondente no `.env`. O caso pede raciocínio curto com ferramentas e respostas rápidas, e um modelo pequeno e barato dá conta porque as regras que importam estão no código, não na esperteza do modelo.
 
 O que segura o custo por conversa:
 
 - só as últimas 20 mensagens vão ao modelo, e chamados e decisões vivem nos serviços, não no contexto;
 - as ferramentas devolvem visões enxutas dos chamados, não o registro completo;
 - `suggestReplies` encerra o turno, sem uma chamada extra ao modelo depois de mostrar os botões;
-- o agent não roda com a conversa transferida ou encerrada, nem passado o limite de 30 mensagens.
+- cada turno tem no máximo 8 passos do modelo, e cada mensagem, no máximo 4.000 caracteres;
+- o agent não roda com a conversa transferida ou encerrada, nem passado o limite de 30 mensagens por conversa ou de 100 por funcionário em 24 horas.
 
 ## Erros e resiliência
 
@@ -152,9 +153,24 @@ O que segura o custo por conversa:
 - Avaliações (evals) com o modelo real para classificação de prioridade, escopo e decisão de transferir, com um conjunto de casos e acompanhamento de regressão.
 - Busca semântica na central de ajuda e na detecção de duplicidade.
 - Notificar o analista em tempo real (SSE) e mostrar o prazo de primeira resposta da transferência.
-- Limite de uso por usuário e por IP para o deploy, além do limite por conversa.
+- Login real e limite por IP. Com a senha simulada, o limite diário por funcionário é o que segura o custo do deploy.
 - Testes de ponta a ponta da interface (Playwright).
 
 ## Deploy
 
-Ainda não publicado. A aplicação já lê `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `TURSO_DATABASE_URL` e `TURSO_AUTH_TOKEN`, que apontam para bancos Turso, e as chaves ficam só nas variáveis de ambiente.
+A aplicação roda na **Vercel** com dois bancos **Turso**: `nexo` para os dados do sistema e `nexo-memory` para a memória do agent. São separados porque `npm run db:seed` apaga todas as tabelas do banco que recebe.
+
+1. Crie os dois bancos no Turso e gere um token de leitura e escrita para cada um.
+2. Com `DATABASE_URL` e `DATABASE_AUTH_TOKEN` apontando para `nexo` no `.env`, rode `npm run db:seed` para criar as tabelas e os dados de exemplo.
+3. Importe o repositório na Vercel, que detecta o Next.js sozinha, e cadastre as variáveis de ambiente:
+
+| Variável | Valor |
+| --- | --- |
+| `OPENAI_API_KEY` | Chave do provedor de LLM |
+| `SESSION_SECRET` | Pelo menos 32 caracteres, gerado como em [Como rodar](#como-rodar) |
+| `DATABASE_URL` / `DATABASE_AUTH_TOKEN` | Banco `nexo` |
+| `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` | Banco `nexo-memory` |
+
+`AGENT_MODEL` e `TICKET_SERVICE_FAILURE_RATE` são opcionais. O prazo dos dados de exemplo é relativo à data do seed, então vale rodá-lo de novo perto de uma demonstração: passados 3 dias, por exemplo, o INC-20150 sai da janela de reabertura.
+
+**Proteção contra abuso e custo.** As chaves ficam só nas variáveis de ambiente, e o cookie de sessão é assinado. O login aceita qualquer senha, então o limite vale por funcionário: 100 mensagens em 24 horas, contadas no banco para valerem em todas as instâncias serverless. Como são 5 usuários de exemplo, o teto é de 500 mensagens por dia, somado aos limites de tamanho e de passos em [Modelo e custo](#modelo-e-custo). Um limite de gasto na conta do provedor de LLM cobre o que escapar disso.
