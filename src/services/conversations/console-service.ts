@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, inArray, ne, or, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, gt, inArray, ne, or, type SQL } from "drizzle-orm";
 import type { Database } from "@/db/client";
 import {
   conversations,
@@ -10,7 +10,12 @@ import {
   type Employee,
   type Message,
 } from "@/db/schema";
-import { ConversationNotFoundError } from "./conversation-service";
+import {
+  ConversationNotFoundError,
+  ConversationStateError,
+  listAuthoredMessages,
+  type AuthoredMessage,
+} from "./conversation-service";
 
 /** How many conversations the console lists, most recent first. */
 export const CONSOLE_LIST_LIMIT = 100;
@@ -27,18 +32,6 @@ export type ConsoleConversation = Conversation & {
   /** Confidence of the agent when it handed the conversation off */
   handoffConfidence: number | null;
 };
-
-/** The action does not fit the current state, e.g. taking a closed conversation. */
-export class ConversationStateError extends Error {
-  constructor(
-    readonly conversationId: string,
-    readonly status: ConversationStatus,
-    message: string,
-  ) {
-    super(message);
-    this.name = "ConversationStateError";
-  }
-}
 
 const takeable = inArray(conversations.status, ["with_agent", "awaiting_analyst"]);
 
@@ -151,6 +144,7 @@ export function createConsoleService({
       conversationId,
       role: "system",
       content: note,
+      outsideAgent: true,
       createdAt: at,
     });
     return summarize(conversation);
@@ -169,11 +163,8 @@ export function createConsoleService({
       return summarize(await load(conversationId));
     },
 
-    async listMessages(conversationId: string): Promise<Message[]> {
-      return db.query.messages.findMany({
-        where: eq(messages.conversationId, conversationId),
-        orderBy: asc(messages.createdAt),
-      });
+    async listMessages(conversationId: string): Promise<AuthoredMessage[]> {
+      return listAuthoredMessages(db, conversationId);
     },
 
     /** Pauses the agent: from now on only the analyst answers. */
@@ -184,6 +175,43 @@ export function createConsoleService({
         { status: "with_analyst", analystId: analyst.id },
         `${analyst.name} assumiu · agent pausado`,
       );
+    },
+
+    /** Answers the employee; only the analyst who took the conversation can. */
+    async reply(
+      conversationId: string,
+      analyst: Analyst,
+      content: string,
+    ): Promise<AuthoredMessage> {
+      const at = now();
+      // Touching the conversation first checks, in one statement, that it is
+      // still this analyst's
+      const updated = await db
+        .update(conversations)
+        .set({ updatedAt: at })
+        .where(and(eq(conversations.id, conversationId), takenBy(analyst)))
+        .returning({ id: conversations.id });
+      if (updated.length === 0) {
+        const current = await load(conversationId);
+        throw new ConversationStateError(
+          conversationId,
+          current.status,
+          `conversation ${conversationId} is not taken by ${analyst.id}`,
+        );
+      }
+      const [message] = await db
+        .insert(messages)
+        .values({
+          id: crypto.randomUUID(),
+          conversationId,
+          role: "analyst",
+          content,
+          authorId: analyst.id,
+          outsideAgent: true,
+          createdAt: at,
+        })
+        .returning();
+      return { ...message, authorName: analyst.name };
     },
 
     /**

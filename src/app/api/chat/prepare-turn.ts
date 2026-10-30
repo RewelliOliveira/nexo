@@ -12,7 +12,8 @@ export type ChatTurn =
 
 /**
  * Decides whether the agent may answer this message. The employee's message
- * is always stored, so an analyst sees it even while the agent is paused.
+ * is always stored, so an analyst sees it even while the agent is paused;
+ * then it stays out of the agent memory and the chat reads it from the database.
  */
 export async function prepareChatTurn(
   conversations: ConversationService,
@@ -24,7 +25,7 @@ export async function prepareChatTurn(
 ): Promise<ChatTurn> {
   const conversation = await conversations.getOrCreate(employeeId, conversationId);
   if (conversation.status !== "with_agent") {
-    await conversations.addMessage(conversationId, "employee", text);
+    await conversations.addMessage(conversationId, "employee", text, { outsideAgent: true });
     return { kind: "paused", status: conversation.status };
   }
 

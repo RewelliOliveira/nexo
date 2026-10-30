@@ -2,12 +2,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "@/db/client";
 import { createTestDatabase } from "@/db/test-database";
 import { createTicketService } from "@/services/tickets";
+import { createConsoleService, type ConsoleService } from "./console-service";
 import {
+  ConversationNotFoundError,
   ConversationStateError,
-  createConsoleService,
-  type ConsoleService,
-} from "./console-service";
-import {
   createConversationService,
   type ConversationService,
 } from "./conversation-service";
@@ -102,6 +100,47 @@ describe("console service", () => {
     for (const action of [console_.assume, console_.release, console_.close]) {
       await expect(action("conv-ana", OTHER_ANALYST)).rejects.toThrow(ConversationStateError);
     }
+  });
+
+  it("lets the analyst who took the conversation talk to the employee", async () => {
+    await handedOff("conv-ana");
+    await expect(console_.reply("conv-ana", MARINA, "Oi, Ana!")).rejects.toThrow(
+      ConversationStateError,
+    );
+    await console_.assume("conv-ana", MARINA);
+    await expect(console_.reply("conv-ana", OTHER_ANALYST, "Oi")).rejects.toThrow(
+      ConversationStateError,
+    );
+
+    await expect(console_.reply("conv-ana", MARINA, "Oi, Ana! Pode reiniciar a VPN?")).resolves
+      .toMatchObject({ role: "analyst", authorId: MARINA.id, authorName: "Marina Alves" });
+    expect((await console_.get("conv-ana")).unanswered).toBe(0);
+
+    await conversations.sendToServiceDesk("emp-ana", "conv-ana", "Reiniciei, voltou.");
+    expect((await console_.get("conv-ana")).unanswered).toBe(1);
+
+    // The chat shows what happened outside the agent: the note and the exchange
+    const outside = await conversations.listOutsideAgent("conv-ana");
+    expect(outside.map((message) => [message.role, message.content])).toEqual([
+      ["system", "Marina Alves assumiu · agent pausado"],
+      ["analyst", "Oi, Ana! Pode reiniciar a VPN?"],
+      ["employee", "Reiniciei, voltou."],
+    ]);
+    expect(outside[1].authorName).toBe("Marina Alves");
+  });
+
+  it("only takes employee messages for the analyst while the agent is paused", async () => {
+    await conversations.getOrCreate("emp-ana", "conv-ana");
+    await expect(
+      conversations.sendToServiceDesk("emp-ana", "conv-ana", "oi"),
+    ).rejects.toThrow(ConversationStateError);
+    await handedOff("conv-ana");
+    await expect(
+      conversations.sendToServiceDesk("emp-bruno", "conv-ana", "oi"),
+    ).rejects.toThrow(ConversationNotFoundError);
+    await expect(
+      conversations.sendToServiceDesk("emp-ana", "conv-ana", "ainda caindo"),
+    ).resolves.toMatchObject({ role: "employee", outsideAgent: true });
   });
 
   it("gives the conversation back to the agent", async () => {

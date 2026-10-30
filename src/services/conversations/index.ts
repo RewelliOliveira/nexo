@@ -11,7 +11,9 @@ import {
 
 export {
   ConversationNotFoundError,
+  ConversationStateError,
   createConversationService,
+  type AuthoredMessage,
   type ConversationService,
   type ConversationServiceOptions,
   type MessageRole,
@@ -23,7 +25,6 @@ export {
 } from "./decision-log-service";
 export {
   CONSOLE_LIST_LIMIT,
-  ConversationStateError,
   createConsoleService,
   type Analyst,
   type ConsoleConversation,
