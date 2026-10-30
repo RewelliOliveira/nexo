@@ -119,6 +119,11 @@ export const messages = sqliteTable(
       .references(() => conversations.id),
     role: text("role", { enum: MESSAGE_ROLES }).notNull(),
     content: text("content").notNull(),
+    // Analyst who wrote it; null for the employee, the agent and system notes
+    authorId: text("author_id").references(() => employees.id),
+    // Not part of the agent memory (sent while it was paused, or written by
+    // the service desk): the chat reads these from here
+    outsideAgent: integer("outside_agent", { mode: "boolean" }).notNull().default(false),
     createdAt: createdAt(),
   },
   (table) => [index("messages_conversation_idx").on(table.conversationId)],
