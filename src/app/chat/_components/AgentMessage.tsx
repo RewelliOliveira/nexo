@@ -11,6 +11,7 @@ import { DraftTicketCard, type DraftState } from "./DraftTicketCard";
 import { QuickReplies } from "./QuickReplies";
 import { RichText } from "./RichText";
 import { TicketSelector } from "./TicketSelector";
+import { TypingDots } from "./TypingDots";
 
 export type AgentMessageContext = {
   decisions: DecisionIndex;
@@ -216,14 +217,7 @@ export function AgentThinking() {
         <span className="text-ink-3">pensando…</span>
       </AgentHeader>
       <div className="flex h-11 w-fit items-center gap-1 rounded-[4px_12px_12px_12px] border border-rule bg-paper px-4">
-        {[0, 150, 300].map((delay) => (
-          <span
-            key={delay}
-            aria-hidden
-            style={{ animationDelay: `${delay}ms` }}
-            className="size-1.5 animate-bounce rounded-full bg-ink-3/60"
-          />
-        ))}
+        <TypingDots />
         <span className="sr-only">O Nexo Assist está respondendo</span>
       </div>
     </div>

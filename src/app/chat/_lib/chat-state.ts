@@ -33,6 +33,8 @@ export const chatStateSchema = z.object({
   decisions: z.array(decisionViewSchema),
   /** What happened outside the agent memory, merged into the chat by time */
   serviceDesk: z.array(serviceDeskMessageSchema),
+  /** Analyst writing a reply right now */
+  typingAnalyst: z.string().nullable(),
 });
 
 /** Chat of a conversation not started yet. */
@@ -41,6 +43,7 @@ export const EMPTY_CHAT_STATE: ChatState = {
   employeeMessages: 0,
   decisions: [],
   serviceDesk: [],
+  typingAnalyst: null,
 };
 
 export type DecisionView = z.infer<typeof decisionViewSchema>;
