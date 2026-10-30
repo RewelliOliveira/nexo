@@ -7,6 +7,7 @@ import {
 import { createUIMessageStreamResponse, validateUIMessages, type UIMessage } from "ai";
 import { z } from "zod";
 import { NEXO_ASSIST_AGENT_ID } from "@/agent/nexo-assist";
+import { createdAtMetadata } from "@/app/chat/_lib/chat-timeline";
 import { getSessionEmployeeId } from "@/lib/session";
 import { mastra } from "@/mastra";
 import {
@@ -98,6 +99,8 @@ export async function POST(request: Request): Promise<Response> {
       mastra,
       agentId: NEXO_ASSIST_AGENT_ID,
       version: "v7",
+      // Lets the chat place service desk messages among the replies
+      messageMetadata: ({ part }) => (part.type === "start" ? createdAtMetadata() : undefined),
       params: {
         // History comes from memory; only the new message is trusted from the client
         messages: [lastMessage],

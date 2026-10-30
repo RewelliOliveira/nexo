@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { EMPTY_CHAT_STATE } from "../_lib/chat-state";
 import { ChatConversation, type ChatConversationProps } from "./ChatConversation";
 
 type ChatScreenProps = Omit<ChatConversationProps, "onStartNew">;
@@ -16,7 +17,7 @@ export function ChatScreen(initial: ChatScreenProps) {
         setChat({
           conversationId: crypto.randomUUID(),
           initialMessages: [],
-          initialState: { status: "with_agent", employeeMessages: 0, decisions: [] },
+          initialState: EMPTY_CHAT_STATE,
           renderedAt: new Date().toISOString(),
         })
       }

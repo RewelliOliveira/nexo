@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CONVERSATION_STATUSES } from "@/lib/domain";
+import { CONVERSATION_STATUSES, MESSAGE_ROLES } from "@/lib/domain";
 
 // Shapes the chat page receives from the server, parsed in the browser
 
@@ -16,16 +16,37 @@ export const decisionViewSchema = z.object({
   outcome: z.enum(DECISION_OUTCOMES).nullable(),
 });
 
+/** A message exchanged with the service desk, or one of its notes. */
+export const serviceDeskMessageSchema = z.object({
+  id: z.string(),
+  role: z.enum(MESSAGE_ROLES),
+  content: z.string(),
+  /** Analyst who wrote it */
+  authorName: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+});
+
 export const chatStateSchema = z.object({
   status: z.enum(CONVERSATION_STATUSES),
   /** Messages the employee sent in this session, counted against the limit */
   employeeMessages: z.number().int().nonnegative(),
   decisions: z.array(decisionViewSchema),
+  /** What happened outside the agent memory, merged into the chat by time */
+  serviceDesk: z.array(serviceDeskMessageSchema),
 });
+
+/** Chat of a conversation not started yet. */
+export const EMPTY_CHAT_STATE: ChatState = {
+  status: "with_agent",
+  employeeMessages: 0,
+  decisions: [],
+  serviceDesk: [],
+};
 
 export type DecisionView = z.infer<typeof decisionViewSchema>;
 export type DecisionOutcome = (typeof DECISION_OUTCOMES)[number];
 export type ChatState = z.infer<typeof chatStateSchema>;
+export type ServiceDeskMessage = z.infer<typeof serviceDeskMessageSchema>;
 
 /** Error body of the chat API, e.g. when the agent is paused. */
 export const chatErrorSchema = z.object({

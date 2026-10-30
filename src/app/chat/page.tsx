@@ -4,6 +4,7 @@ import { getConversationService } from "@/services/conversations";
 import { AppShell } from "../_components/AppShell";
 import { requireEmployee } from "../_lib/auth";
 import { ChatScreen } from "./_components/ChatScreen";
+import { EMPTY_CHAT_STATE } from "./_lib/chat-state";
 import { loadChatHistory, loadChatState } from "./_lib/load-chat";
 
 export const metadata: Metadata = { title: "Atendimento · Nexo Assist" };
@@ -27,7 +28,7 @@ async function Chat() {
         loadChatState(employee.id, conversationId),
         loadChatHistory(employee.id, conversationId),
       ])
-    : [{ status: "with_agent" as const, employeeMessages: 0, decisions: [] }, []];
+    : [EMPTY_CHAT_STATE, []];
 
   return (
     <AppShell employee={employee}>
