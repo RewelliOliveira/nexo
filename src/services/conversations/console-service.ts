@@ -111,6 +111,17 @@ export function createConsoleService({
     return conversation;
   }
 
+  async function addNote(conversationId: string, note: string, at: Date): Promise<void> {
+    await db.insert(messages).values({
+      id: crypto.randomUUID(),
+      conversationId,
+      role: "system",
+      content: note,
+      outsideAgent: true,
+      createdAt: at,
+    });
+  }
+
   /**
    * Moves the conversation only if it is still in one of the expected
    * states, so two analysts clicking at once cannot both take it.
@@ -139,14 +150,7 @@ export function createConsoleService({
         `conversation ${conversationId} is ${current.status}${owner}`,
       );
     }
-    await db.insert(messages).values({
-      id: crypto.randomUUID(),
-      conversationId,
-      role: "system",
-      content: note,
-      outsideAgent: true,
-      createdAt: at,
-    });
+    await addNote(conversationId, note, at);
     return summarize(conversation);
   }
 
@@ -165,6 +169,29 @@ export function createConsoleService({
 
     async listMessages(conversationId: string): Promise<AuthoredMessage[]> {
       return listAuthoredMessages(db, conversationId);
+    },
+
+    /** The conversation, as long as it is this analyst's to act on. */
+    async getTaken(conversationId: string, analyst: Analyst): Promise<Conversation> {
+      const conversation = await load(conversationId);
+      if (conversation.status !== "with_analyst" || conversation.analystId !== analyst.id) {
+        throw new ConversationStateError(
+          conversationId,
+          conversation.status,
+          `conversation ${conversationId} is not taken by ${analyst.id}`,
+        );
+      }
+      return conversation;
+    },
+
+    /** Leaves a note both the employee and the console see. */
+    async note(conversationId: string, note: string): Promise<void> {
+      const at = now();
+      await addNote(conversationId, note, at);
+      await db
+        .update(conversations)
+        .set({ updatedAt: at })
+        .where(eq(conversations.id, conversationId));
     },
 
     /** Pauses the agent: from now on only the analyst answers. */

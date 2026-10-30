@@ -4,6 +4,7 @@ import { Loader2, MessagesSquare, Ticket } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import type { z } from "zod";
 import type { Employee } from "@/db/schema";
+import type { TicketStatus } from "@/lib/domain";
 import {
   consoleListSchema,
   conversationDetailSchema,
@@ -13,6 +14,7 @@ import {
 import { usePolling } from "../_lib/use-polling";
 import {
   assumeConversation,
+  changeTicketStatus,
   closeConversation,
   releaseConversation,
   replyToConversation,
@@ -54,6 +56,7 @@ export function ConsoleScreen({
   const [pending, setPending] = useState<ConsoleAction | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [ticketsOpen, setTicketsOpen] = useState(true);
+  const [changingTicketId, setChangingTicketId] = useState<string | null>(null);
   // Answers for a conversation the analyst already left are dropped
   const selectedRef = useRef(initialSelectedId);
 
@@ -131,6 +134,24 @@ export function ConsoleScreen({
     return delivered;
   }
 
+  async function changeStatus(ticketId: string, status: TicketStatus) {
+    const conversationId = selectedRef.current;
+    if (!conversationId || changingTicketId) return;
+    setChangingTicketId(ticketId);
+    setActionError(null);
+    try {
+      const result = await changeTicketStatus(conversationId, ticketId, status);
+      if (!result.ok) setActionError(result.error.message);
+    } catch {
+      setActionError("Não consegui alterar o status. Confira a conexão e tente de novo.");
+    }
+    await Promise.all([refreshList(), refreshDetail(conversationId)]);
+    setChangingTicketId(null);
+  }
+
+  const mine =
+    detail?.conversation.status === "with_analyst" && detail.conversation.analystId === analyst.id;
+
   return (
     <>
       <ConsoleRail
@@ -185,7 +206,18 @@ export function ConsoleScreen({
         </main>
       )}
       {detail && ticketsOpen && (
-        <TicketPanel detail={detail} onClose={() => setTicketsOpen(false)} />
+        <TicketPanel
+          detail={detail}
+          control={
+            mine
+              ? {
+                  changingId: changingTicketId,
+                  onChange: (ticketId, status) => void changeStatus(ticketId, status),
+                }
+              : undefined
+          }
+          onClose={() => setTicketsOpen(false)}
+        />
       )}
     </>
   );

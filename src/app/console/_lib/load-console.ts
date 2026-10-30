@@ -7,6 +7,7 @@ import {
 } from "@/services/conversations";
 import {
   getTicketService,
+  nextStatuses,
   TicketServiceUnavailableError,
   type TicketSummary,
 } from "@/services/tickets";
@@ -105,6 +106,7 @@ function toConsoleTicket(ticket: TicketSummary): ConsoleTicket {
     category: ticket.category,
     priority: ticket.priority,
     status: ticket.status,
+    nextStatuses: nextStatuses(ticket, new Date()),
     title: ticket.title,
     isOverdue: ticket.isOverdue,
     updatedAt: ticket.updatedAt.toISOString(),
