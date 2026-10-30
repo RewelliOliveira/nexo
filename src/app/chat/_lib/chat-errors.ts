@@ -45,6 +45,12 @@ export function describeChatError(error: Error): ChatFailure {
   };
 }
 
+/** The agent refused because an analyst has the conversation. */
+export function isAgentPaused(error: Error): boolean {
+  const parsed = chatErrorSchema.safeParse(parseJson(error.message));
+  return parsed.success && parsed.data.error.code === "agent_paused";
+}
+
 function parseJson(text: string): unknown {
   try {
     return JSON.parse(text);

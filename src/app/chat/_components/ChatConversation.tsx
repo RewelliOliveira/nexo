@@ -8,13 +8,15 @@ import type { ConversationStatus } from "@/lib/domain";
 import { TopBar } from "../../_components/AppShell";
 import { Button } from "../../_components/Button";
 import { MAX_EMPLOYEE_MESSAGES } from "../../api/chat/prepare-turn";
-import { describeChatError } from "../_lib/chat-errors";
+import { describeChatError, isAgentPaused } from "../_lib/chat-errors";
 import { chatStateSchema, type ChatState, type DecisionView } from "../_lib/chat-state";
+import { mergeChat } from "../_lib/chat-timeline";
 import { textOf, toolCallsOf } from "../_lib/tool-parts";
 import type { DecisionIndex } from "./AgentActions";
 import { AgentMessage, AgentThinking, UserMessage } from "./AgentMessage";
 import { ChatNotice, NewConversationButton } from "./ChatNotice";
 import { Composer, type ComposerHandle } from "./Composer";
+import { ServiceDeskMessage } from "./ServiceDeskMessage";
 
 // The server keeps the history in the agent memory: only the new message goes
 const transport = new DefaultChatTransport<UIMessage>({
@@ -37,6 +39,10 @@ export type ChatConversationProps = {
 const LIMIT_WARNING_AT = MAX_EMPLOYEE_MESSAGES - 5;
 
 const ANALYST_POLL_INTERVAL_MS = 5000;
+/** With the agent, polling only notices an analyst taking over */
+const AGENT_POLL_INTERVAL_MS = 15000;
+
+const SEND_FAILED = "Não consegui enviar sua mensagem. Confira a conexão e tente de novo.";
 
 export function ChatConversation({
   conversationId,
@@ -60,16 +66,26 @@ export function ChatConversation({
     }
   }, [conversationId]);
 
-  const { messages, sendMessage, regenerate, clearError, status, error } = useChat({
+  const { messages, setMessages, sendMessage, regenerate, clearError, status, error } = useChat({
     id: conversationId,
     messages: initialMessages,
     transport,
     onFinish: () => void refreshState(),
-    onError: () => void refreshState(),
+    onError: (failure) => {
+      // Taken by an analyst meanwhile: the message was kept for them and
+      // comes back with the service desk messages
+      if (isAgentPaused(failure)) {
+        setMessages((current) => (current.at(-1)?.role === "user" ? current.slice(0, -1) : current));
+      }
+      void refreshState();
+    },
   });
 
+  const [deskSending, setDeskSending] = useState(false);
+  const [deskError, setDeskError] = useState<string | null>(null);
   const decisions = useMemo(() => indexDecisions(state.decisions), [state.decisions]);
   const ticketsByDraft = useMemo(() => indexTicketsByDraft(messages), [messages]);
+  const items = useMemo(() => mergeChat(messages, state.serviceDesk), [messages, state.serviceDesk]);
   const busy = status === "submitted" || status === "streaming";
   const limitReached = state.employeeMessages >= MAX_EMPLOYEE_MESSAGES;
   const nearLimit = state.employeeMessages >= LIMIT_WARNING_AT && !limitReached;
@@ -79,27 +95,57 @@ export function ChatConversation({
   const thinking = busy && (last?.role !== "assistant" || !hasContent(last));
   const failure = error ? describeChatError(error) : null;
 
-  // With an analyst nothing streams back: polling shows when the analyst
-  // gives the conversation back to the agent or closes it
+  // With an analyst nothing streams back: polling brings the analyst's
+  // messages and shows when the conversation goes back to the agent or closes.
+  // With the agent it only notices an analyst taking over
   const withAnalyst = state.status === "awaiting_analyst" || state.status === "with_analyst";
+  const pollEvery =
+    state.status === "closed" || busy
+      ? null
+      : withAnalyst
+        ? ANALYST_POLL_INTERVAL_MS
+        : AGENT_POLL_INTERVAL_MS;
   useEffect(() => {
-    if (!withAnalyst) return;
+    if (pollEvery === null) return;
     const id = window.setInterval(() => {
       if (document.visibilityState === "visible") void refreshState();
-    }, ANALYST_POLL_INTERVAL_MS);
+    }, pollEvery);
     return () => window.clearInterval(id);
-  }, [withAnalyst, refreshState]);
+  }, [pollEvery, refreshState]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
     // Also when buttons or a notice appear under the reply after the stream
-  }, [messages, thinking, status, state.status, error]);
+  }, [messages, thinking, status, state.status, state.serviceDesk.length, error, deskError]);
 
-  function send(text: string) {
+  function send(text: string): void | Promise<boolean> {
+    if (withAnalyst) return sendToServiceDesk(text);
     if (busy || !open) return;
     clearError();
     setState((current) => ({ ...current, employeeMessages: current.employeeMessages + 1 }));
     void sendMessage({ text });
+  }
+
+  /** While the agent is paused the message goes straight to the analyst. */
+  async function sendToServiceDesk(text: string): Promise<boolean> {
+    setDeskSending(true);
+    setDeskError(null);
+    let delivered = false;
+    try {
+      const response = await fetch(`/api/chat/${conversationId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      delivered = response.ok;
+      // A 409 means the conversation left the analyst: the refresh explains it
+      if (!response.ok && response.status !== 409) setDeskError(SEND_FAILED);
+    } catch {
+      setDeskError(SEND_FAILED);
+    }
+    await refreshState();
+    setDeskSending(false);
+    return delivered;
   }
 
   function retry() {
@@ -119,13 +165,18 @@ export function ChatConversation({
             aria-busy={busy}
             className="mx-auto flex w-full max-w-202 flex-col gap-5 px-4 pt-7 pb-1 sm:px-6"
           >
-            {messages.length === 0 && <EmptyConversation />}
-            {messages.map((message, index) => {
+            {items.length === 0 && <EmptyConversation />}
+            {items.map((item, position) => {
+              if (item.kind === "service_desk") {
+                return <ServiceDeskMessage key={item.message.id} message={item.message} />;
+              }
+              const { message, index } = item;
               if (message.role === "user") {
                 return <UserMessage key={message.id} text={textOf(message)} />;
               }
               const next = messages[index + 1];
-              const latest = index === messages.length - 1;
+              // Quick replies stop working once the service desk said something after
+              const latest = position === items.length - 1;
               // A reply that failed before saying anything is shown as the error below
               if (!hasContent(message) && !(busy && latest)) return null;
               return (
@@ -180,6 +231,16 @@ export function ChatConversation({
                 {failure.message}
               </ChatNotice>
             )}
+            {deskError && (
+              <ChatNotice
+                role="alert"
+                tone="danger"
+                icon={AlertTriangle}
+                title="Sua mensagem não chegou ao analista"
+              >
+                {deskError}
+              </ChatNotice>
+            )}
             <div ref={endRef} />
           </div>
         </div>
@@ -203,8 +264,10 @@ export function ChatConversation({
           <Composer
             ref={composerRef}
             onSend={send}
-            busy={busy}
+            busy={withAnalyst ? deskSending : busy}
             disabledReason={composerBlockedReason(state.status, limitReached)}
+            placeholder={withAnalyst ? "Escreva para o analista…" : undefined}
+            label={withAnalyst ? "Mensagem para o analista" : undefined}
           />
           <p
             className={`text-right text-[12.5px] ${nearLimit ? "font-medium text-warning-text" : "text-ink-3"}`}
@@ -250,8 +313,8 @@ function composerBlockedReason(
   status: ConversationStatus,
   limitReached: boolean,
 ): string | undefined {
-  if (status === "awaiting_analyst") return "Aguardando um analista…";
-  if (status === "with_analyst") return "Um analista está cuidando da sua conversa";
+  // With the service desk the employee keeps writing, whatever the limit
+  if (status === "awaiting_analyst" || status === "with_analyst") return undefined;
   if (status === "closed") return "Conversa encerrada";
   if (limitReached) return "Limite de mensagens atingido";
   return undefined;
@@ -279,14 +342,14 @@ function PausedNotice({
   if (status === "with_analyst") {
     return (
       <ChatNotice tone="primary" icon={Headset} title="Um analista assumiu sua conversa">
-        Ele já tem o resumo do caso e vai responder por aqui.
+        Ele já tem o resumo do caso. Converse com ele por aqui; o Nexo Assist fica pausado.
       </ChatNotice>
     );
   }
   return (
     <ChatNotice tone="warning" icon={Headset} title="Conversa transferida para um analista">
-      O analista recebeu o resumo do caso e vai continuar por aqui. Enquanto isso, o Nexo Assist
-      não responde nesta conversa.
+      O analista recebeu o resumo do caso e vai continuar por aqui. Se quiser, já pode escrever:
+      ele lê tudo ao assumir. Enquanto isso, o Nexo Assist não responde.
     </ChatNotice>
   );
 }

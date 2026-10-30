@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeChatError } from "./chat-errors";
+import { describeChatError, isAgentPaused } from "./chat-errors";
 
 const apiError = (code: string, message: string) =>
   new Error(JSON.stringify({ error: { code, message } }));
@@ -44,5 +44,11 @@ describe("chat errors", () => {
     const failure = describeChatError(new Error('{"unexpected": true}'));
     expect(failure).toMatchObject({ kind: "retry" });
     expect(JSON.stringify(failure)).not.toContain("unexpected");
+  });
+
+  it("tells when an analyst has the conversation", () => {
+    expect(isAgentPaused(apiError("agent_paused", "transferida"))).toBe(true);
+    expect(isAgentPaused(apiError("message_limit", "limite"))).toBe(false);
+    expect(isAgentPaused(new Error("stream failed"))).toBe(false);
   });
 });
