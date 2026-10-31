@@ -165,9 +165,6 @@ export function ConsoleScreen({
     setChangingTicketId(null);
   }
 
-  const mine =
-    detail?.conversation.status === "with_analyst" && detail.conversation.analystId === analyst.id;
-
   return (
     <>
       <ConsoleRail
@@ -225,14 +222,10 @@ export function ConsoleScreen({
       {detail && ticketsOpen && (
         <TicketPanel
           detail={detail}
-          control={
-            mine
-              ? {
-                  changingId: changingTicketId,
-                  onChange: (ticketId, status) => void changeStatus(ticketId, status),
-                }
-              : undefined
-          }
+          control={{
+            changingId: changingTicketId,
+            onChange: (ticketId, status) => void changeStatus(ticketId, status),
+          }}
           onClose={() => setTicketsOpen(false)}
         />
       )}

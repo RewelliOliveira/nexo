@@ -4,7 +4,6 @@ import { createTestDatabase } from "@/db/test-database";
 import { createConsoleService, type ConsoleService } from "./console-service";
 import {
   ANALYST_TYPING_TTL_MS,
-  ConversationStateError,
   createConversationService,
   type ConversationService,
 } from "./conversation-service";
@@ -69,23 +68,5 @@ describe("analyst typing", () => {
     await console_.markTyping(CONVERSATION, MARINA);
 
     expect((await console_.get(CONVERSATION)).updatedAt).toEqual(before.updatedAt);
-  });
-});
-
-describe("getTaken", () => {
-  it("refuses anyone but the analyst who took the conversation", async () => {
-    const now = () => new Date(Date.UTC(2026, 9, 28, 12));
-    const db = await createTestDatabase(now());
-    const service = createConsoleService({ db, now });
-    await createConversationService({ db, now }).getOrCreate("emp-ana", CONVERSATION);
-
-    await expect(service.getTaken(CONVERSATION, MARINA)).rejects.toBeInstanceOf(
-      ConversationStateError,
-    );
-    await service.assume(CONVERSATION, MARINA);
-    expect((await service.getTaken(CONVERSATION, MARINA)).employeeId).toBe("emp-ana");
-    await expect(service.getTaken(CONVERSATION, OTHER_ANALYST)).rejects.toBeInstanceOf(
-      ConversationStateError,
-    );
   });
 });

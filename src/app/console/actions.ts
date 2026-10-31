@@ -67,8 +67,9 @@ export async function replyToConversation(
 }
 
 /**
- * Moves a ticket of the employee in a conversation this analyst took. The
- * ticket is looked up under that employee, so no other ticket can be reached.
+ * Moves a ticket of the employee in this conversation; any analyst can, taken
+ * or not. The ticket is looked up under that employee, so no other ticket can
+ * be reached.
  */
 export async function changeTicketStatus(
   conversationId: string,
@@ -80,7 +81,7 @@ export async function changeTicketStatus(
     return { ok: false, error: { code: "invalid_request", message: "Chamado ou status inválido." } };
   }
   return run(conversationId, async (service, id, analyst) => {
-    const { employeeId } = await service.getTaken(id, analyst);
+    const { employeeId } = await service.get(id);
     const { ticketId, status } = change.data;
     const note = `${analyst.name} alterou ${ticketId} para ${TICKET_STATUS_LABEL[status]}`;
     await withRetry(() => getTicketService().changeStatus(employeeId, ticketId, { status, note }));

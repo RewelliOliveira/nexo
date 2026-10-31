@@ -19,7 +19,7 @@ import { firstName } from "../_lib/console-view";
 
 const DONE_STATUSES: TicketStatus[] = ["resolved", "closed"];
 
-/** Lets the analyst who took the conversation move the tickets. */
+/** Lets any analyst move the tickets, whoever has the conversation. */
 type StatusControl = {
   /** Ticket being changed; the others wait for it */
   changingId: string | null;
@@ -28,8 +28,7 @@ type StatusControl = {
 
 type TicketPanelProps = {
   detail: ConversationDetail;
-  /** Absent when the tickets are read-only for this analyst */
-  control?: StatusControl;
+  control: StatusControl;
   onClose(): void;
 };
 
@@ -113,7 +112,7 @@ function CurrentTicket({
 }: {
   ticket: ConsoleTicket;
   detail: ConversationDetail;
-  control?: StatusControl;
+  control: StatusControl;
 }) {
   const event = lastEvent(detail);
   return (
@@ -121,7 +120,7 @@ function CurrentTicket({
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center gap-2">
           <span className="flex-1 text-[12.5px] font-medium text-ink-3">{ticket.id}</span>
-          {control && ticket.nextStatuses.length > 0 ? (
+          {ticket.nextStatuses.length > 0 ? (
             <StatusSelect ticket={ticket} control={control} />
           ) : (
             <TicketStatusBadge status={ticket.status} />
@@ -172,7 +171,7 @@ function StatusSelect({ ticket, control }: { ticket: ConsoleTicket; control: Sta
   );
 }
 
-function TicketRow({ ticket, control }: { ticket: ConsoleTicket; control?: StatusControl }) {
+function TicketRow({ ticket, control }: { ticket: ConsoleTicket; control: StatusControl }) {
   const status =
     ticket.status === "resolved" && ticket.resolvedAt
       ? `Resolvido em ${formatDay(new Date(ticket.resolvedAt))}`
@@ -186,7 +185,7 @@ function TicketRow({ ticket, control }: { ticket: ConsoleTicket; control?: Statu
           {ticket.id} · {status}
           {ticket.isOverdue && <span className="text-warning-text"> · vencido</span>}
         </p>
-        {control && ticket.nextStatuses.length > 0 && (
+        {ticket.nextStatuses.length > 0 && (
           <div className="pt-1">
             <StatusSelect ticket={ticket} control={control} />
           </div>

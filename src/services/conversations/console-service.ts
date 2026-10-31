@@ -171,19 +171,6 @@ export function createConsoleService({
       return listAuthoredMessages(db, conversationId);
     },
 
-    /** The conversation, as long as it is this analyst's to act on. */
-    async getTaken(conversationId: string, analyst: Analyst): Promise<Conversation> {
-      const conversation = await load(conversationId);
-      if (conversation.status !== "with_analyst" || conversation.analystId !== analyst.id) {
-        throw new ConversationStateError(
-          conversationId,
-          conversation.status,
-          `conversation ${conversationId} is not taken by ${analyst.id}`,
-        );
-      }
-      return conversation;
-    },
-
     /** Leaves a note both the employee and the console see. */
     async note(conversationId: string, note: string): Promise<void> {
       const at = now();
