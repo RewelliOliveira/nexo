@@ -119,7 +119,7 @@ export function DraftTicketCard({
             </kbd>
           </Button>
           <Button variant="secondary" onClick={onCorrect}>
-            Corrigir
+            Editar
           </Button>
           <Button variant="ghost" onClick={onCancel}>
             Cancelar
