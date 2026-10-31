@@ -2,11 +2,13 @@
 
 Agent de atendimento do service desk de TI da Nexo. O funcionário conversa com o Nexo Assist num chat. O agent consulta a central de ajuda e os chamados dele, abre e complementa chamados com confirmação e transfere o caso para um analista quando precisa. No console, o analista vê as conversas, entende o que o agent fez e por quê, assume o atendimento, conversa com o funcionário e devolve a conversa ao agent ou a encerra.
 
+**Deploy:** https://nexo-theta-kohl.vercel.app (usuários de exemplo [abaixo](#usuários-de-exemplo), com qualquer senha).
+
 Desafio técnico do processo seletivo Beyond the Bytes. Especificação em [`docs/Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf`](docs/Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf) e protótipo em [`docs/nexo.pen`](docs/nexo.pen).
 
 ## Como rodar
 
-Pré-requisitos: Node.js 20.9 ou mais novo e uma chave da API da OpenAI ([gere aqui](https://platform.openai.com/api-keys)).
+Pré-requisitos: Node.js 22.13 ou mais novo (exigência do Mastra) e uma chave da API da OpenAI ([gere aqui](https://platform.openai.com/api-keys)).
 
 ```bash
 npm install
@@ -35,9 +37,9 @@ O login aceita qualquer senha não vazia, já que o protótipo não tem diretór
 
 ### Roteiro rápido
 
-1. Como **Ana**, pergunte "como está meu chamado do notebook?". O agent lista os chamados, aponta que o INC-20311 passou do prazo e oferece chamar um analista. Aceite.
-2. Como **Marina**, em outra janela anônima, abra o console. A conversa da Ana aparece como transferida, com o resumo do caso, o motivo, a confiança do agent e cada decisão dele. Assuma e responda.
-3. De volta à Ana, a resposta da Marina aparece no chat e Ana responde. Depois Marina devolve a conversa ao agent ou a encerra.
+1. Como **Ana**, pergunte "como está meu chamado do notebook?". O agent lista os chamados e o chat aponta que o INC-20311 passou do prazo, com a oferta de chamar um analista. Escolha "Falar com um analista".
+2. Como **Marina**, em outra janela anônima, abra o console. A conversa da Ana aparece como transferida, com o resumo do caso, o motivo, a confiança do agent e cada decisão dele. Assuma e responda. Enquanto ela escreve, o chat da Ana mostra que há alguém digitando.
+3. De volta à Ana, a resposta da Marina aparece no chat e Ana responde. Marina pode mudar o status dos chamados no painel lateral. Depois ela devolve a conversa ao agent ou a encerra.
 4. Outros casos: "minha VPN dá erro 809" (artigo da central de ajuda, que vale só para Windows 10), "preciso de acesso ao Figma" (rascunho de REQ para confirmar), "o sistema de vendas caiu para toda a equipe" (chamado crítico, transferido na hora) e "quero ver meu saldo de férias" (fora do escopo, redirecionado ao RH).
 
 ### Outros comandos
@@ -57,7 +59,7 @@ O login aceita qualquer senha não vazia, já que o protótipo não tem diretór
 
 ```
 src/app/            Interface e API: chat, console, login, perfil, rotas e server actions
-  │ fala só com ↓
+  │ chama o agent no chat e os serviços direto no resto ↓
 src/agent/          Agent Mastra: instruções, ferramentas, retry e registro de decisões
   │ fala só com ↓
 src/services/       Regras de domínio, sem saber que existe um agent
@@ -68,6 +70,8 @@ src/services/       Regras de domínio, sem saber que existe um agent
   employees/        Diretório de funcionários (login)
 src/db/             Schema Drizzle, migrations e dados de exemplo
 ```
+
+As dependências só descem: os serviços não importam o agent nem a interface, e o agent nunca toca no banco. O console e o login não passam pelo agent porque não envolvem o modelo: analista e sessão falam direto com os serviços, que continuam sendo o único acesso aos dados.
 
 - **Next.js 16 (App Router).** As páginas leem o banco e a sessão a cada requisição (Cache Components com `<Suspense>`), e nenhum dado de conversa ou chamado vai para o cache.
 - **Mastra** roda o agent. A memória fica numa thread por conversa, em libSQL (`mastra.db` em desenvolvimento, um segundo banco Turso no deploy), e o `resourceId` é o funcionário logado. Assim o Mastra recusa uma thread que não pertence a ele. Os traces do Mastra Studio ficam num arquivo DuckDB só em desenvolvimento, porque as funções serverless não têm disco gravável. Em produção, o registro de decisões continua no banco.
@@ -88,7 +92,7 @@ A cada mensagem o modelo recebe as instruções (`src/agent/instructions.ts`, co
 | `draftTicket` | Montar o rascunho completo e calcular o prazo, sem criar nada |
 | `createTicket` / `updateTicket` / `reopenTicket` | Alterar dados, sempre com confirmação |
 | `handoffToAnalyst` | Transferir com resumo e motivo |
-| `suggestReplies` | Oferecer respostas rápidas e encerrar o turno |
+| `suggestReplies` | Oferecer respostas rápidas com a pergunta correspondente e encerrar o turno |
 
 O prompt orienta a conversa: uma pergunta por vez, classificação de tipo, categoria e prioridade, quando transferir e o que está fora do escopo. **As regras críticas não dependem do modelo obedecer.** Elas são verificadas no código das ferramentas e no serviço de chamados:
 
@@ -99,6 +103,7 @@ O prompt orienta a conversa: uma pergunta por vez, classificação de tipo, cate
 | Sem duplicidade | O serviço recusa criar chamado se há um aberto do mesmo funcionário, na mesma categoria, sobre o mesmo problema, e devolve o existente para o agent oferecer a atualização. Chamados resolvidos há até 7 dias podem ser reabertos; depois disso, não. |
 | Prioridade e prazo | O prazo é calculado pelo serviço, nunca pelo modelo: 1 h corrida para Crítica (plantão 24 h) e horas úteis de seg. a sex., das 8h às 18h, para as demais. `isOverdue` sai do serviço. |
 | Transferência em caso crítico | Todo chamado crítico criado é transferido automaticamente, e isso fica registrado como uma decisão ligada à criação |
+| Oferta em chamado vencido | Quando a resposta termina mostrando um chamado com `isOverdue`, o chat exibe a oferta de analista com botões (`overdueTicketsOf`), mesmo que o modelo esqueça de oferecer. A transferência em si continua dependendo da escolha do funcionário. |
 | Agent calado com analista | A rota do chat não chama o modelo se a conversa não está `with_agent`. A mensagem do funcionário é guardada para o analista. |
 | Pouca segurança | Criar, atualizar ou reabrir chamado com `confidence < 0.5` é bloqueado. A transferência não, porque é o caminho certo quando falta segurança. |
 | Privacidade | O id do funcionário vem da sessão (cookie assinado com HMAC), nunca do modelo. Toda consulta do serviço filtra por ele, e chamado de outra pessoa responde "não encontrado", sem confirmar que existe. |
@@ -131,6 +136,18 @@ O que segura o custo por conversa:
 - **Falha do modelo ou da rede.** O chat diferencia sessão expirada, servidor indisponível e conexão perdida, e oferece "Tentar novamente" sem perder a mensagem.
 - **Corridas no console.** Assumir, devolver, encerrar e responder são atualizações condicionais no banco, então dois analistas não assumem a mesma conversa e só quem assumiu responde. Quem perde a corrida vê uma mensagem clara e a lista atualizada.
 
+## Como garanti a qualidade das decisões
+
+Três camadas, da mais forte para a mais fraca:
+
+1. **O código impede o erro grave.** As regras da tabela em [Como o agent decide](#como-o-agent-decide) valem mesmo com o modelo errando, e os testes verificam isso com o modelo fazendo a coisa errada de propósito.
+2. **Testes automatizados** cobrem as regras, as ferramentas e o agent no loop com um modelo roteirizado. Eles garantem o comportamento do sistema, não o julgamento do modelo.
+3. **Execução com o modelo real**, pela interface e pela API, nos cenários do roteiro e nas regras do Anexo A: privacidade, duplicidade forçada, pedido para ignorar as regras, caso crítico e escopo. É manual e por amostragem. Por isso, avaliações automatizadas aparecem em [O que faria com mais tempo](#o-que-faria-com-mais-tempo).
+
+A terceira camada mudou o projeto. Com a oferta de analista só no prompt, o modelo ofereceu em 2 de 7 execuções do mesmo pedido sobre um chamado vencido. Em outro caso, chamou `suggestReplies` sem escrever nada em 3 de 34 turnos, o que deixaria botões sem pergunta. Os dois viraram garantia de código: a oferta passou a sair do chat, e a pergunta passou a ser um campo obrigatório da ferramenta.
+
+A classificação de prioridade e a escolha entre central de ajuda, chamado e transferência continuam sendo julgamento do modelo. O que limita o estrago de um erro nesse ponto é o funcionário conferir o rascunho antes de criar, e o registro de decisões mostrar o raciocínio para o analista.
+
 ## Testes
 
 `npm test` roda os testes com Vitest e bancos libSQL em memória:
@@ -138,7 +155,7 @@ O que segura o custo por conversa:
 - **Serviços:** prazos em horas úteis, duplicidade, reabertura, privacidade, quedas do sistema legado, transições do console e mensagens com o analista.
 - **Ferramentas:** confirmação, rascunho de turno anterior, confiança mínima, duplicidade forçada pelo modelo, transferência automática, privacidade e registro de decisões.
 - **Agent no loop** (`src/agent/nexo-assist.scenarios.test.ts`): o agent Mastra de verdade com um modelo roteirizado. Verifica que não cria o chamado no mesmo turno do rascunho, cria após a confirmação, ignora outro funcionário indicado pelo modelo e encerra o turno nas respostas rápidas. Os testes não chamam o LLM: são determinísticos e grátis.
-- **Interface:** montagem da linha do tempo, ordenação das mensagens do analista entre as do agent, tradução de erros e rotas.
+- **Interface:** montagem da linha do tempo, ordenação das mensagens do analista entre as do agent, oferta em chamado vencido, tradução de erros e rotas.
 
 ## Decisões e trade-offs
 
@@ -162,7 +179,7 @@ O que segura o custo por conversa:
 A aplicação roda na **Vercel** com dois bancos **Turso**: `nexo` para os dados do sistema e `nexo-memory` para a memória do agent. São separados porque `npm run db:seed` apaga todas as tabelas do banco que recebe.
 
 1. Crie os dois bancos no Turso e gere um token de leitura e escrita para cada um.
-2. Com `DATABASE_URL` e `DATABASE_AUTH_TOKEN` apontando para `nexo` no `.env`, rode `npm run db:seed` para criar as tabelas e os dados de exemplo.
+2. Com `DATABASE_URL` e `DATABASE_AUTH_TOKEN` apontando para `nexo` no `.env`, rode `npm run db:seed` para criar as tabelas e os dados de exemplo. Depois volte o `.env` para o banco local: com ele apontando para o Turso, um novo seed apaga os dados do deploy.
 3. Importe o repositório na Vercel, que detecta o Next.js sozinha, e cadastre as variáveis de ambiente:
 
 | Variável | Valor |
