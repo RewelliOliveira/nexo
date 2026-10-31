@@ -111,6 +111,17 @@ export function createConsoleService({
     return conversation;
   }
 
+  async function addNote(conversationId: string, note: string, at: Date): Promise<void> {
+    await db.insert(messages).values({
+      id: crypto.randomUUID(),
+      conversationId,
+      role: "system",
+      content: note,
+      outsideAgent: true,
+      createdAt: at,
+    });
+  }
+
   /**
    * Moves the conversation only if it is still in one of the expected
    * states, so two analysts clicking at once cannot both take it.
@@ -124,7 +135,7 @@ export function createConsoleService({
     const at = now();
     const updated = await db
       .update(conversations)
-      .set({ ...to, updatedAt: at })
+      .set({ ...to, analystTypingAt: null, updatedAt: at })
       .where(
         and(eq(conversations.id, conversationId), allowed),
       )
@@ -139,14 +150,7 @@ export function createConsoleService({
         `conversation ${conversationId} is ${current.status}${owner}`,
       );
     }
-    await db.insert(messages).values({
-      id: crypto.randomUUID(),
-      conversationId,
-      role: "system",
-      content: note,
-      outsideAgent: true,
-      createdAt: at,
-    });
+    await addNote(conversationId, note, at);
     return summarize(conversation);
   }
 
@@ -165,6 +169,27 @@ export function createConsoleService({
 
     async listMessages(conversationId: string): Promise<AuthoredMessage[]> {
       return listAuthoredMessages(db, conversationId);
+    },
+
+    /** Leaves a note both the employee and the console see. */
+    async note(conversationId: string, note: string): Promise<void> {
+      const at = now();
+      await addNote(conversationId, note, at);
+      await db
+        .update(conversations)
+        .set({ updatedAt: at })
+        .where(eq(conversations.id, conversationId));
+    },
+
+    /**
+     * The analyst is writing. Does not touch updatedAt: typing is not activity
+     * that should reorder the list. Ignored once the conversation left them.
+     */
+    async markTyping(conversationId: string, analyst: Analyst): Promise<void> {
+      await db
+        .update(conversations)
+        .set({ analystTypingAt: now() })
+        .where(and(eq(conversations.id, conversationId), takenBy(analyst)));
     },
 
     /** Pauses the agent: from now on only the analyst answers. */
@@ -188,7 +213,7 @@ export function createConsoleService({
       // still this analyst's
       const updated = await db
         .update(conversations)
-        .set({ updatedAt: at })
+        .set({ analystTypingAt: null, updatedAt: at })
         .where(and(eq(conversations.id, conversationId), takenBy(analyst)))
         .returning({ id: conversations.id });
       if (updated.length === 0) {

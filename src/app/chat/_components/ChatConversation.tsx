@@ -16,7 +16,7 @@ import type { DecisionIndex } from "./AgentActions";
 import { AgentMessage, AgentThinking, UserMessage } from "./AgentMessage";
 import { ChatNotice, NewConversationButton } from "./ChatNotice";
 import { Composer, type ComposerHandle } from "./Composer";
-import { ServiceDeskMessage } from "./ServiceDeskMessage";
+import { AnalystTyping, ServiceDeskMessage } from "./ServiceDeskMessage";
 
 // The server keeps the history in the agent memory: only the new message goes
 const transport = new DefaultChatTransport<UIMessage>({
@@ -38,7 +38,9 @@ export type ChatConversationProps = {
 /** From here on the counter warns that the session is ending. */
 const LIMIT_WARNING_AT = MAX_EMPLOYEE_MESSAGES - 5;
 
-const ANALYST_POLL_INTERVAL_MS = 5000;
+/** Fast enough for the typing dots to follow the analyst */
+const ANALYST_POLL_INTERVAL_MS = 2000;
+const AWAITING_POLL_INTERVAL_MS = 5000;
 /** With the agent, polling only notices an analyst taking over */
 const AGENT_POLL_INTERVAL_MS = 15000;
 
@@ -102,9 +104,11 @@ export function ChatConversation({
   const pollEvery =
     state.status === "closed" || busy
       ? null
-      : withAnalyst
+      : state.status === "with_analyst"
         ? ANALYST_POLL_INTERVAL_MS
-        : AGENT_POLL_INTERVAL_MS;
+        : withAnalyst
+          ? AWAITING_POLL_INTERVAL_MS
+          : AGENT_POLL_INTERVAL_MS;
   useEffect(() => {
     if (pollEvery === null) return;
     const id = window.setInterval(() => {
@@ -116,7 +120,16 @@ export function ChatConversation({
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
     // Also when buttons or a notice appear under the reply after the stream
-  }, [messages, thinking, status, state.status, state.serviceDesk.length, error, deskError]);
+  }, [
+    messages,
+    thinking,
+    status,
+    state.status,
+    state.serviceDesk.length,
+    state.typingAnalyst,
+    error,
+    deskError,
+  ]);
 
   function send(text: string): void | Promise<boolean> {
     if (withAnalyst) return sendToServiceDesk(text);
@@ -197,6 +210,7 @@ export function ChatConversation({
               );
             })}
             {thinking && <AgentThinking />}
+            {state.typingAnalyst && <AnalystTyping name={state.typingAnalyst} />}
             {failure?.kind === "retry" && (
               <ChatNotice
                 role="alert"

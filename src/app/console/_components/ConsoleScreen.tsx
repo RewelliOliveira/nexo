@@ -4,6 +4,7 @@ import { Loader2, MessagesSquare, Ticket } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import type { z } from "zod";
 import type { Employee } from "@/db/schema";
+import type { TicketStatus } from "@/lib/domain";
 import {
   consoleListSchema,
   conversationDetailSchema,
@@ -13,6 +14,7 @@ import {
 import { usePolling } from "../_lib/use-polling";
 import {
   assumeConversation,
+  changeTicketStatus,
   closeConversation,
   releaseConversation,
   replyToConversation,
@@ -28,6 +30,9 @@ const ACTIONS: Record<ConsoleAction, (conversationId: string) => Promise<Console
   release: releaseConversation,
   close: closeConversation,
 };
+
+/** At most one typing signal this often; shorter than ANALYST_TYPING_TTL_MS. */
+const TYPING_SIGNAL_INTERVAL_MS = 2000;
 
 type ConsoleScreenProps = {
   analyst: Pick<Employee, "id" | "name" | "email">;
@@ -54,8 +59,10 @@ export function ConsoleScreen({
   const [pending, setPending] = useState<ConsoleAction | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [ticketsOpen, setTicketsOpen] = useState(true);
+  const [changingTicketId, setChangingTicketId] = useState<string | null>(null);
   // Answers for a conversation the analyst already left are dropped
   const selectedRef = useRef(initialSelectedId);
+  const lastTypingSignalRef = useRef(0);
 
   const refreshList = useCallback(async () => {
     try {
@@ -91,6 +98,7 @@ export function ConsoleScreen({
     setSelectedId(conversationId);
     setDetail(null);
     setActionError(null);
+    lastTypingSignalRef.current = 0;
     const url = new URL(window.location.href);
     if (conversationId) url.searchParams.set("conversa", conversationId);
     else url.searchParams.delete("conversa");
@@ -119,6 +127,7 @@ export function ConsoleScreen({
     const conversationId = selectedRef.current;
     if (!conversationId) return false;
     setActionError(null);
+    lastTypingSignalRef.current = 0;
     let delivered = false;
     try {
       const result = await replyToConversation(conversationId, text);
@@ -129,6 +138,31 @@ export function ConsoleScreen({
     }
     await Promise.all([refreshList(), refreshDetail(conversationId)]);
     return delivered;
+  }
+
+  /** Best effort: losing a signal only makes the dots disappear sooner. */
+  function signalTyping() {
+    const conversationId = selectedRef.current;
+    const at = Date.now();
+    if (!conversationId || at - lastTypingSignalRef.current < TYPING_SIGNAL_INTERVAL_MS) return;
+    lastTypingSignalRef.current = at;
+    const url = `/api/console/conversations/${encodeURIComponent(conversationId)}/typing`;
+    void fetch(url, { method: "POST" }).catch(() => undefined);
+  }
+
+  async function changeStatus(ticketId: string, status: TicketStatus) {
+    const conversationId = selectedRef.current;
+    if (!conversationId || changingTicketId) return;
+    setChangingTicketId(ticketId);
+    setActionError(null);
+    try {
+      const result = await changeTicketStatus(conversationId, ticketId, status);
+      if (!result.ok) setActionError(result.error.message);
+    } catch {
+      setActionError("Não consegui alterar o status. Confira a conexão e tente de novo.");
+    }
+    await Promise.all([refreshList(), refreshDetail(conversationId)]);
+    setChangingTicketId(null);
   }
 
   return (
@@ -156,6 +190,7 @@ export function ConsoleScreen({
           error={actionError}
           onAction={(action) => void act(action)}
           onReply={reply}
+          onTyping={signalTyping}
           onBack={() => select(null)}
           ticketsToggle={
             !ticketsOpen && (
@@ -185,7 +220,14 @@ export function ConsoleScreen({
         </main>
       )}
       {detail && ticketsOpen && (
-        <TicketPanel detail={detail} onClose={() => setTicketsOpen(false)} />
+        <TicketPanel
+          detail={detail}
+          control={{
+            changingId: changingTicketId,
+            onChange: (ticketId, status) => void changeStatus(ticketId, status),
+          }}
+          onClose={() => setTicketsOpen(false)}
+        />
       )}
     </>
   );

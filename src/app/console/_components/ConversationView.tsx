@@ -39,6 +39,8 @@ type ConversationViewProps = {
   onAction(action: ConsoleAction): void;
   /** Sends a message to the employee; false when it was not delivered */
   onReply(text: string): Promise<boolean>;
+  /** The analyst is writing a reply */
+  onTyping(): void;
   onBack(): void;
   /** Header button that shows the tickets panel when it is hidden */
   ticketsToggle?: ReactNode;
@@ -53,6 +55,7 @@ export function ConversationView({
   error,
   onAction,
   onReply,
+  onTyping,
   onBack,
   ticketsToggle,
 }: ConversationViewProps) {
@@ -171,6 +174,7 @@ export function ConversationView({
         error={error}
         onAction={onAction}
         onReply={onReply}
+        onTyping={onTyping}
       />
     </main>
   );
@@ -365,6 +369,7 @@ type FooterProps = {
   error: string | null;
   onAction(action: ConsoleAction): void;
   onReply(text: string): Promise<boolean>;
+  onTyping(): void;
 };
 
 function ConversationFooter({
@@ -374,6 +379,7 @@ function ConversationFooter({
   error,
   onAction,
   onReply,
+  onTyping,
 }: FooterProps) {
   const name = firstName(conversation.employee.name);
   const handoffTime = conversation.handedOffAt
@@ -412,6 +418,7 @@ function ConversationFooter({
       bar = mine ? (
         <Composer
           onSend={onReply}
+          onTyping={onTyping}
           busy={pending !== null}
           placeholder={`Escreva para ${name}…`}
           label={`Mensagem para ${conversation.employee.name}`}

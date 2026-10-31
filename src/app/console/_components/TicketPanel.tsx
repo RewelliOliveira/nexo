@@ -1,5 +1,12 @@
-import { ArrowRightLeft, Headset, ServerCrash, X, type LucideIcon } from "lucide-react";
-import type { TicketStatus } from "@/lib/domain";
+import {
+  ArrowRightLeft,
+  Headset,
+  Loader2,
+  ServerCrash,
+  X,
+  type LucideIcon,
+} from "lucide-react";
+import { TICKET_STATUSES, type TicketStatus } from "@/lib/domain";
 import { TicketStatusBadge, TicketStatusDot } from "../../_components/Badge";
 import { formatDay, formatTime } from "../../_lib/format";
 import {
@@ -12,13 +19,21 @@ import { firstName } from "../_lib/console-view";
 
 const DONE_STATUSES: TicketStatus[] = ["resolved", "closed"];
 
+/** Lets any analyst move the tickets, whoever has the conversation. */
+type StatusControl = {
+  /** Ticket being changed; the others wait for it */
+  changingId: string | null;
+  onChange(ticketId: string, status: TicketStatus): void;
+};
+
 type TicketPanelProps = {
   detail: ConversationDetail;
+  control: StatusControl;
   onClose(): void;
 };
 
 /** The employee's tickets, starting with the one this conversation is about. */
-export function TicketPanel({ detail, onClose }: TicketPanelProps) {
+export function TicketPanel({ detail, control, onClose }: TicketPanelProps) {
   const { conversation, tickets } = detail;
   const name = firstName(conversation.employee.name);
   const current = tickets?.find((ticket) => ticket.id === conversation.handoffTicketId);
@@ -64,7 +79,7 @@ export function TicketPanel({ detail, onClose }: TicketPanelProps) {
             {current && (
               <section className="flex flex-col gap-3">
                 <h3 className="text-[12.5px] font-semibold text-ink-3">Desta conversa</h3>
-                <CurrentTicket ticket={current} detail={detail} />
+                <CurrentTicket ticket={current} detail={detail} control={control} />
               </section>
             )}
             <section className="flex flex-col gap-1">
@@ -78,7 +93,7 @@ export function TicketPanel({ detail, onClose }: TicketPanelProps) {
               ) : (
                 <ul className="flex flex-col divide-y divide-rule">
                   {others.map((ticket) => (
-                    <TicketRow key={ticket.id} ticket={ticket} />
+                    <TicketRow key={ticket.id} ticket={ticket} control={control} />
                   ))}
                 </ul>
               )}
@@ -90,14 +105,26 @@ export function TicketPanel({ detail, onClose }: TicketPanelProps) {
   );
 }
 
-function CurrentTicket({ ticket, detail }: { ticket: ConsoleTicket; detail: ConversationDetail }) {
+function CurrentTicket({
+  ticket,
+  detail,
+  control,
+}: {
+  ticket: ConsoleTicket;
+  detail: ConversationDetail;
+  control: StatusControl;
+}) {
   const event = lastEvent(detail);
   return (
     <article className="flex flex-col gap-3.5 rounded-[12px] bg-desk p-4">
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center gap-2">
           <span className="flex-1 text-[12.5px] font-medium text-ink-3">{ticket.id}</span>
-          <TicketStatusBadge status={ticket.status} />
+          {ticket.nextStatuses.length > 0 ? (
+            <StatusSelect ticket={ticket} control={control} />
+          ) : (
+            <TicketStatusBadge status={ticket.status} />
+          )}
         </div>
         <p className="text-[15.5px] leading-snug font-semibold text-ink">{ticket.title}</p>
         <p className="text-[13.5px] text-ink-3">
@@ -117,7 +144,34 @@ function CurrentTicket({ ticket, detail }: { ticket: ConsoleTicket; detail: Conv
   );
 }
 
-function TicketRow({ ticket }: { ticket: ConsoleTicket }) {
+function StatusSelect({ ticket, control }: { ticket: ConsoleTicket; control: StatusControl }) {
+  const busy = control.changingId === ticket.id;
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5">
+      {busy && <Loader2 aria-hidden className="size-3.5 animate-spin text-ink-3" />}
+      <select
+        aria-label={`Status de ${ticket.id}`}
+        value={ticket.status}
+        disabled={control.changingId !== null}
+        onChange={(event) => {
+          const status = TICKET_STATUSES.find((value) => value === event.target.value);
+          if (status) control.onChange(ticket.id, status);
+        }}
+        className="h-7 cursor-pointer rounded-[8px] border border-ink/12 bg-paper px-1.5 text-[12.5px] font-medium text-ink focus-visible:outline-2 focus-visible:outline-cta disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {TICKET_STATUSES.filter(
+          (status) => status === ticket.status || ticket.nextStatuses.includes(status),
+        ).map((status) => (
+          <option key={status} value={status}>
+            {TICKET_STATUS_LABEL[status]}
+          </option>
+        ))}
+      </select>
+    </span>
+  );
+}
+
+function TicketRow({ ticket, control }: { ticket: ConsoleTicket; control: StatusControl }) {
   const status =
     ticket.status === "resolved" && ticket.resolvedAt
       ? `Resolvido em ${formatDay(new Date(ticket.resolvedAt))}`
@@ -131,6 +185,11 @@ function TicketRow({ ticket }: { ticket: ConsoleTicket }) {
           {ticket.id} · {status}
           {ticket.isOverdue && <span className="text-warning-text"> · vencido</span>}
         </p>
+        {ticket.nextStatuses.length > 0 && (
+          <div className="pt-1">
+            <StatusSelect ticket={ticket} control={control} />
+          </div>
+        )}
       </div>
     </li>
   );

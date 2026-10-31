@@ -72,7 +72,11 @@ const envelopeSchema = z.union([
 
 const ticketIdInputSchema = z.object({ ticketId: z.string() });
 const draftIdInputSchema = z.object({ draftId: z.string() });
-const repliesInputSchema = z.object({ options: z.array(z.string()).min(1) });
+// Replies stored before the question became required have none
+const repliesInputSchema = z.object({
+  question: z.string().optional(),
+  options: z.array(z.string()).min(1),
+});
 
 export type ToolCall = {
   toolCallId: string;
@@ -106,14 +110,43 @@ export function toolCallsOf(message: UIMessage): ToolCall[] {
   });
 }
 
-/** Options the agent offered as buttons in this message, if any. */
-export function quickRepliesOf(message: UIMessage): string[] {
+function quickReplyInput(message: UIMessage) {
   for (const part of message.parts) {
     if (!isToolUIPart(part) || getToolName(part) !== QUICK_REPLIES_TOOL) continue;
     const input = repliesInputSchema.safeParse(part.input);
-    if (input.success) return input.data.options;
+    if (input.success) return input.data;
   }
-  return [];
+  return null;
+}
+
+/** Options the agent offered as buttons in this message, if any. */
+export function quickRepliesOf(message: UIMessage): string[] {
+  return quickReplyInput(message)?.options ?? [];
+}
+
+/** The question those buttons answer, for a message with no text of its own. */
+export function quickReplyQuestionOf(message: UIMessage): string | null {
+  return quickReplyInput(message)?.question ?? null;
+}
+
+/** Offered under an overdue ticket (Annex A), whatever the model wrote. */
+export const OVERDUE_REPLIES = ["Falar com um analista", "Adicionar informação", "Não, obrigado"];
+
+/**
+ * Overdue tickets the reply ended up showing. Only the last call counts: a
+ * listing followed by other tools was a check, not an answer about tickets.
+ */
+export function overdueTicketsOf(calls: ToolCall[]): string[] {
+  const last = calls.at(-1);
+  if (last?.state !== "done" || !last.result) return [];
+  const { result } = last;
+  const tickets =
+    result.tool === "listMyTickets"
+      ? result.data.tickets
+      : result.tool === "getTicket"
+        ? [result.data.ticket]
+        : [];
+  return tickets.filter((ticket) => ticket.isOverdue).map((ticket) => ticket.id);
 }
 
 export function textOf(message: UIMessage): string {

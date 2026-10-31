@@ -53,6 +53,8 @@ export const consoleTicketSchema = z.object({
   category: z.enum(TICKET_CATEGORIES),
   priority: z.enum(TICKET_PRIORITIES),
   status: z.enum(TICKET_STATUSES),
+  /** Where an analyst can move it; the ticket service enforces the same list */
+  nextStatuses: z.array(z.enum(TICKET_STATUSES)),
   title: z.string(),
   isOverdue: z.boolean(),
   updatedAt: z.iso.datetime(),

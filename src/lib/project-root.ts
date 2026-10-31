@@ -27,5 +27,5 @@ export function resolveDatabaseUrl(url: string, root: string = getProjectRoot())
   const filePath = url.slice("file:".length);
   if (filePath === ":memory:" || path.isAbsolute(filePath)) return url;
   // libSQL does not accept Windows backslashes in file URLs
-  return `file:${path.join(root, filePath).replaceAll("\\", "/")}`;
+  return `file:${path.join(/*turbopackIgnore: true*/ root, filePath).replaceAll("\\", "/")}`;
 }

@@ -24,10 +24,11 @@ export async function loadChatState(
   const conversations = getConversationService();
   const conversation = await conversations.find(employeeId, conversationId);
   if (!conversation) return EMPTY_CHAT_STATE;
-  const [employeeMessages, decisions, serviceDesk] = await Promise.all([
+  const [employeeMessages, decisions, serviceDesk, typingAnalyst] = await Promise.all([
     conversations.countMessages(conversationId, "employee"),
     getDecisionLogService().listByConversation(conversationId),
     conversations.listOutsideAgent(conversationId),
+    conversations.findTypingAnalyst(conversation),
   ]);
   return {
     status: conversation.status,
@@ -40,6 +41,7 @@ export async function loadChatState(
       authorName: message.authorName,
       createdAt: message.createdAt.toISOString(),
     })),
+    typingAnalyst,
   };
 }
 

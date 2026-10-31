@@ -2,7 +2,7 @@
 
 Agent de atendimento do service desk de TI da Nexo (~2.000 funcionários). O funcionário conversa num chat; o agent consulta a central de ajuda e os chamados dele, abre/atualiza chamados e transfere para um analista quando precisa. Analistas usam um console para assumir, devolver e encerrar conversas.
 
-Desafio técnico (Beyond the Bytes). Especificação completa: `docs/PRD.pdf`. Protótipo visual: `docs/nexo.pen`.
+Desafio técnico (Beyond the Bytes). Especificação completa: `docs/Desafio_Tecnico_Nexo_Assist_PRD_v5.pdf`. Protótipo visual: `docs/nexo.pen`.
 
 ## Stack
 

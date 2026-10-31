@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   TICKET_CATEGORIES,
   TICKET_PRIORITIES,
+  TICKET_STATUSES,
   TICKET_TYPES,
   type Conversation,
   type Ticket,
@@ -30,6 +31,12 @@ export const reopenTicketInputSchema = z.object({
   reason: z.string().trim().min(3).max(4000),
 });
 
+export const changeStatusInputSchema = z.object({
+  status: z.enum(TICKET_STATUSES),
+  /** Goes into the ticket history, written for the employee to read */
+  note: z.string().trim().min(3).max(4000),
+});
+
 export const handoffInputSchema = z.object({
   conversationId: z.string().min(1),
   reason: z.enum(HANDOFF_REASONS),
@@ -40,6 +47,7 @@ export const handoffInputSchema = z.object({
 export type CreateTicketInput = z.input<typeof createTicketInputSchema>;
 export type UpdateTicketInput = z.input<typeof updateTicketInputSchema>;
 export type ReopenTicketInput = z.input<typeof reopenTicketInputSchema>;
+export type ChangeStatusInput = z.input<typeof changeStatusInputSchema>;
 export type HandoffInput = z.input<typeof handoffInputSchema>;
 
 export type TicketSummary = Ticket & { isOverdue: boolean };

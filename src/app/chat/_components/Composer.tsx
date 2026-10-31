@@ -12,6 +12,8 @@ type ComposerProps = {
   ref?: Ref<ComposerHandle>;
   /** Resolving to false puts the text back, e.g. when it was not delivered */
   onSend(text: string): void | Promise<boolean>;
+  /** Called on each keystroke that leaves text in the field */
+  onTyping?(): void;
   /** Busy: typing is allowed, sending waits */
   busy: boolean;
   /** Blocked for good (closed, limit): shows why instead */
@@ -26,6 +28,7 @@ const DEFAULT_PLACEHOLDER = "Escreva para o Nexo…";
 export function Composer({
   ref,
   onSend,
+  onTyping,
   busy,
   disabledReason,
   placeholder: basePlaceholder = DEFAULT_PLACEHOLDER,
@@ -77,7 +80,10 @@ export function Composer({
         value={text}
         disabled={disabled}
         placeholder={disabledReason ?? hint ?? basePlaceholder}
-        onChange={(event) => setText(event.target.value)}
+        onChange={(event) => {
+          setText(event.target.value);
+          if (event.target.value.trim()) onTyping?.();
+        }}
         onKeyDown={(event) => {
           if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
             event.preventDefault();
