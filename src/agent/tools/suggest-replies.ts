@@ -4,6 +4,12 @@ import { z } from "zod";
 export const SUGGEST_REPLIES_TOOL_ID = "suggestReplies";
 
 export const suggestRepliesInputSchema = z.object({
+  question: z
+    .string()
+    .trim()
+    .min(3)
+    .max(300)
+    .describe("A pergunta que os botões respondem, ex.: 'Quem está sendo afetado?'"),
   options: z
     .array(z.string().trim().min(1).max(40))
     .min(2)
@@ -13,7 +19,9 @@ export const suggestRepliesInputSchema = z.object({
 
 /**
  * Quick reply buttons under the agent's message. Only presentation: it changes
- * nothing, so unlike the other tools it records no decision.
+ * nothing, so unlike the other tools it records no decision. The question is
+ * required because models sometimes call this without writing any text, and
+ * the chat must never show buttons with nothing above them.
  */
 export const suggestReplies = createTool({
   id: SUGGEST_REPLIES_TOOL_ID,

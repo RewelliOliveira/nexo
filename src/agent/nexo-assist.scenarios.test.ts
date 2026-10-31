@@ -155,7 +155,10 @@ describe("Nexo Assist in the agent loop", () => {
   it("ends the turn once quick replies are shown", async () => {
     steps.push(() => [
       ...reply("Quem está sendo afetado?").slice(0, -1),
-      ...toolCall("suggestReplies", { options: ["Só eu", "Minha equipe"] }),
+      ...toolCall("suggestReplies", {
+        question: "Quem está sendo afetado?",
+        options: ["Só eu", "Minha equipe"],
+      }),
     ]);
     // A further model call would fail: the script has a single step
     expect(await chat("Minha VPN caiu")).toBe("Quem está sendo afetado?");

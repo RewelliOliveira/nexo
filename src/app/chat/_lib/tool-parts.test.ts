@@ -1,7 +1,13 @@
 import type { UIMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { actionLabels } from "./action-labels";
-import { quickRepliesOf, toCardTicket, toolCallsOf } from "./tool-parts";
+import {
+  overdueTicketsOf,
+  quickRepliesOf,
+  quickReplyQuestionOf,
+  toCardTicket,
+  toolCallsOf,
+} from "./tool-parts";
 
 const TICKET = {
   id: "INC-20311",
@@ -118,6 +124,78 @@ describe("tool parts of an agent message", () => {
     ]);
     expect(toolCallsOf(message)).toEqual([]);
     expect(quickRepliesOf(message)).toEqual(["Só eu", "Minha equipe"]);
+  });
+
+  it("reads the question of the quick replies, when there is one", () => {
+    const part = {
+      type: "tool-suggestReplies",
+      toolCallId: "c1",
+      state: "output-available",
+      output: { shown: true },
+    } as const;
+    const asked = agentMessage([
+      { ...part, input: { question: "Quem é afetado?", options: ["Só eu", "Minha equipe"] } },
+    ]);
+    const stored = agentMessage([{ ...part, input: { options: ["Só eu", "Minha equipe"] } }]);
+    expect(quickReplyQuestionOf(asked)).toBe("Quem é afetado?");
+    expect(quickReplyQuestionOf(stored)).toBeNull();
+  });
+});
+
+describe("overdue tickets of a reply", () => {
+  const listing = (tickets: unknown[]) => ({
+    type: "tool-listMyTickets" as const,
+    toolCallId: "c1",
+    state: "output-available" as const,
+    input: {},
+    output: { ok: true, data: { tickets }, decisionId: "d1" },
+  });
+
+  it("finds the overdue tickets of a listing", () => {
+    const calls = toolCallsOf(
+      agentMessage([listing([TICKET, { ...TICKET, id: "REQ-10442", isOverdue: false }])]),
+    );
+    expect(overdueTicketsOf(calls)).toEqual(["INC-20311"]);
+  });
+
+  it("finds an overdue ticket opened on its own", () => {
+    const calls = toolCallsOf(
+      agentMessage([
+        {
+          type: "tool-getTicket",
+          toolCallId: "c1",
+          state: "output-available",
+          input: { ticketId: "INC-20311" },
+          output: {
+            ok: true,
+            data: { ticket: { ...TICKET, description: "Lento", updates: [] } },
+            decisionId: "d1",
+          },
+        },
+      ]),
+    );
+    expect(overdueTicketsOf(calls)).toEqual(["INC-20311"]);
+  });
+
+  it("ignores a listing that was only a step towards something else", () => {
+    const calls = toolCallsOf(
+      agentMessage([
+        listing([TICKET]),
+        {
+          type: "tool-handoffToAnalyst",
+          toolCallId: "c2",
+          state: "output-available",
+          input: {},
+          output: { ok: true, data: { ticket: TICKET }, decisionId: "d2" },
+        },
+      ]),
+    );
+    expect(overdueTicketsOf(calls)).toEqual([]);
+  });
+
+  it("offers nothing when no ticket is overdue", () => {
+    const calls = toolCallsOf(agentMessage([listing([{ ...TICKET, isOverdue: false }])]));
+    expect(overdueTicketsOf(calls)).toEqual([]);
   });
 });
 

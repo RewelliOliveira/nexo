@@ -4,7 +4,16 @@ import type { ReactNode } from "react";
 import type { TicketView } from "@/agent/tools/ticket-view";
 import { Button } from "../../_components/Button";
 import { TicketCard } from "../../_components/TicketCard";
-import { quickRepliesOf, toCardTicket, toolCallsOf, type ToolCall } from "../_lib/tool-parts";
+import {
+  OVERDUE_REPLIES,
+  overdueTicketsOf,
+  quickRepliesOf,
+  quickReplyQuestionOf,
+  textOf,
+  toCardTicket,
+  toolCallsOf,
+  type ToolCall,
+} from "../_lib/tool-parts";
 import { AgentActions, type DecisionIndex } from "./AgentActions";
 import { ChatNotice } from "./ChatNotice";
 import { DraftTicketCard, type DraftState } from "./DraftTicketCard";
@@ -48,10 +57,15 @@ export function AgentMessage({ message, ...context }: AgentMessageProps) {
     (call) => call.state === "failed" && call.errorCode === "service_unavailable",
   );
   const asksWhichTicket = calls.at(-1)?.toolName === "listMyTickets" && replies.length === 0;
+  // Annex A: an overdue ticket always gets the offer, even if the model forgot
+  const overdue = replies.length === 0 ? overdueTicketsOf(calls) : [];
+  const overdueChoice =
+    OVERDUE_REPLIES.find((option) => option === context.nextUserText) ?? null;
 
   const flow: ReactNode[] = [];
   const awaiting: ReactNode[] = [];
-  let texts: string[] = [];
+  const question = textOf(message) ? null : quickReplyQuestionOf(message);
+  let texts: string[] = question ? [question] : [];
   const flushText = (footer?: ReactNode) => {
     if (texts.length === 0 && !footer) return;
     flow.push(
@@ -133,6 +147,21 @@ export function AgentMessage({ message, ...context }: AgentMessageProps) {
       </AgentHeader>
       {flow}
       {awaiting}
+      {overdue.length > 0 && (context.interactive || overdueChoice) && (
+        <AgentBubble>
+          <p>
+            {overdue.length === 1
+              ? `O ${overdue[0]} passou do prazo. Quer que eu chame um analista?`
+              : `${overdue.join(" e ")} passaram do prazo. Quer que eu chame um analista?`}
+          </p>
+          <QuickReplies
+            options={OVERDUE_REPLIES}
+            chosen={overdueChoice}
+            interactive={context.interactive}
+            onChoose={context.onSend}
+          />
+        </AgentBubble>
+      )}
       {ticketsUnavailable && context.latest && (
         <ChatNotice
           tone="warning"
